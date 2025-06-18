@@ -1,5 +1,4 @@
-selenium>=4.10.0
-PyQt5>=5.15.0
-PyQtWebEngine>=5.15.0
+selenium==4.16.0
+PyQt5==5.15.10
 requests==2.31.0
 packaging==23.2 

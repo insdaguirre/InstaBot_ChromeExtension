@@ -53,7 +53,7 @@ class InstagramAutomationGUI(QMainWindow):
         tabs.addTab(follow_tab, "Follow")
         tabs.addTab(unfollow_tab, "Unfollow")
         tabs.addTab(log_tab, "Log")
-        
+
         # Set up Follow tab
         follow_layout = QVBoxLayout(follow_tab)
         
@@ -237,11 +237,11 @@ class InstagramAutomationGUI(QMainWindow):
             self.history_log.setText(f"Error loading log: {str(e)}")
 
     def start_automation(self, action_type):
-        if action_type == 'follow':
-            if not self.username_input.text() or not self.password_input.text():
-                QMessageBox.warning(self, 'Error', 'Please enter your Instagram credentials.')
-                return
+        if not self.username_input.text() or not self.password_input.text():
+            QMessageBox.warning(self, 'Error', 'Please enter your Instagram credentials.')
+            return
 
+        if action_type == 'follow':
             target_accounts = [acc.strip() for acc in self.accounts_input.toPlainText().split('\n') if acc.strip()]
             if not target_accounts:
                 QMessageBox.warning(self, 'Error', 'Please enter at least one target account.')
@@ -254,53 +254,37 @@ class InstagramAutomationGUI(QMainWindow):
             # Save settings
             self.save_settings()
 
-            # Create bot instance for following
-            self.bot = InstagramBot(
-                username=self.username_input.text(),
-                password=self.password_input.text(),
-                target_accounts=target_accounts,
-                users_per_account=self.follow_count.value(),
-                min_delay=self.min_follow_delay.value(),
-                max_delay=self.max_follow_delay.value(),
-                unfollow_delay=0  # Not used for following
-            )
-
-            # Start worker
-            self.worker = BotWorker(self.bot, action_type)
-            self.worker.log_signal.connect(lambda msg: self.log(msg, action_type))
-            self.worker.finished.connect(lambda accounts: self.automation_finished(action_type, accounts))
-            self.worker.start()
-
-            # Update UI
-            self.follow_button.setEnabled(False)
-            
         elif action_type == 'unfollow':
-            if not self.username_input.text() or not self.password_input.text():
-                QMessageBox.warning(self, 'Error', 'Please enter your Instagram credentials.')
+            if not hasattr(self, 'unfollow_accounts') or not self.unfollow_accounts:
+                QMessageBox.warning(self, 'Error', 'Please import accounts to unfollow from CSV.')
                 return
 
             if self.min_unfollow_delay.value() >= self.max_unfollow_delay.value():
                 QMessageBox.warning(self, 'Error', 'Maximum delay must be greater than minimum delay.')
                 return
 
-            # Create bot instance for unfollowing
-            self.bot = InstagramBot(
-                username=self.username_input.text(),
-                password=self.password_input.text(),
-                target_accounts=self.unfollow_accounts,  # Used as unfollow list
-                users_per_account=0,  # Not used for unfollowing
-                min_delay=self.min_unfollow_delay.value(),
-                max_delay=self.max_unfollow_delay.value(),
-                unfollow_delay=0  # Not used here
-            )
+            target_accounts = self.unfollow_accounts
 
-            # Start worker
-            self.worker = BotWorker(self.bot, action_type)
-            self.worker.log_signal.connect(lambda msg: self.log(msg, action_type))
-            self.worker.finished.connect(lambda accounts: self.automation_finished(action_type, accounts))
-            self.worker.start()
+        # Create bot instance
+        self.bot = InstagramBot(
+            username=self.username_input.text(),
+            password=self.password_input.text(),
+            target_accounts=target_accounts,
+            users_per_account=self.follow_count.value() if action_type == 'follow' else 0,
+            min_delay=self.min_follow_delay.value() if action_type == 'follow' else self.min_unfollow_delay.value(),
+            max_delay=self.max_follow_delay.value() if action_type == 'follow' else self.max_unfollow_delay.value()
+        )
 
-            # Update UI
+        # Create and start worker thread
+        self.worker = BotWorker(self.bot, action_type)
+        self.worker.log_signal.connect(lambda msg: self.log(msg, action_type))
+        self.worker.finished.connect(lambda accounts: self.automation_finished(action_type, accounts))
+        self.worker.start()
+
+        # Update button states
+        if action_type == 'follow':
+            self.follow_button.setEnabled(False)
+        else:
             self.unfollow_button.setEnabled(False)
 
     def log(self, message, action_type):

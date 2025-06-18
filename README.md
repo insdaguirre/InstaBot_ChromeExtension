@@ -1,60 +1,62 @@
 # Instagram Automation Tool
 
-A Python-based Instagram automation tool with a GUI interface for managing follow/unfollow operations.
+A GUI-based tool for automating Instagram following/unfollowing with customizable delays and targets.
 
 ## Features
 
-- Follow users from target accounts
-- Unfollow users using CSV import
-- Customizable delay between actions
-- Action logging and history
 - User-friendly GUI interface
-- CSV export of followed users
-
-## Requirements
-
-- Python 3.x
-- Google Chrome browser
-- macOS (tested on darwin 24.5.0)
+- Multiple target account support
+- Customizable follow/unfollow delays
+- Automatic unfollowing after specified delay
+- Progress logging
+- Settings persistence
+- Rate limit avoidance
 
 ## Installation
 
-1. Clone the repository:
+1. Make sure you have Python 3.8+ installed
+2. Clone this repository
+3. Install the required packages:
 ```bash
-git clone <your-repo-url>
-cd instagram-automation
-```
-
-2. Create and activate a virtual environment:
-```bash
-python3 -m venv venv
-source venv/bin/activate
-```
-
-3. Install dependencies:
-```bash
-pip3 install PyQt5 selenium webdriver-manager requests
+pip install -r requirements.txt
 ```
 
 ## Usage
 
-1. Run the GUI:
+1. Run the application:
 ```bash
-python3 gui.py
+python gui.py
 ```
 
 2. Enter your Instagram credentials
-3. Add target accounts for following or import CSV for unfollowing
-4. Configure delay settings
-5. Start the automation process
+3. Add target accounts (one per line)
+4. Configure settings:
+   - Number of users to follow per account
+   - Follow delay range (in seconds)
+   - Unfollow delay (in hours)
+5. Click Start to begin automation
 
-## Safety Features
+## Important Notes
 
-- Customizable delays between actions
-- Built-in rate limiting
-- Action logging for tracking
-- Error handling and retry mechanisms
+- Use this tool responsibly and in accordance with Instagram's terms of service
+- Recommended delays: 30-60 seconds between follows
+- Keep daily follow counts reasonable to avoid restrictions
+- The tool saves followed users and their timestamps for proper unfollow scheduling
+- You can stop the automation at any time by clicking the Stop button
 
-## Note
+## Files
 
-This tool is for educational purposes only. Please use responsibly and in accordance with Instagram's terms of service. 
+- `gui.py`: Main GUI application
+- `instagram_bot.py`: Instagram automation logic
+- `followed_users.json`: Tracks followed users (created automatically)
+- `settings.json`: Saves your settings (created automatically)
+
+## Requirements
+
+- Python 3.8+
+- Chrome browser
+- Stable internet connection
+
+## Disclaimer
+
+This tool is for educational purposes only. Use at your own risk. The authors are not responsible for any account restrictions or bans that may result from using this tool. 

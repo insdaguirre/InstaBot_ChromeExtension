@@ -20,6 +20,7 @@ import csv
 from pathlib import Path
 from selenium.webdriver.common.action_chains import ActionChains
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDialog
+from PyQt5.QtCore import QUrl
 
 class InstagramBot:
     def __init__(self, username, password, target_accounts, users_per_account=50,
@@ -31,12 +32,12 @@ class InstagramBot:
         self.min_delay = min_delay
         self.max_delay = max_delay
         self.unfollow_delay = unfollow_delay
+        self.is_running = False
         self.driver = None
         self.followed_users = []
-        self.is_running = True
-        self.unfollow_thread = None
-        self.data_dir = self.setup_data_directory()
         self.attempted_follows = self.load_attempted_follows()
+        self.data_dir = self.setup_data_directory()
+        self.unfollow_thread = None
 
     def setup_data_directory(self):
         """Create and return the data directory path"""
@@ -74,48 +75,54 @@ class InstagramBot:
         except:
             return None
 
-    def setup_driver(self):
+    def init_driver(self):
+        """Initialize the web driver"""
         chrome_options = Options()
-        chrome_options.add_argument("--start-maximized")
-        chrome_options.add_argument("--disable-notifications")
-        chrome_options.add_argument("--disable-popup-blocking")
-        
-        system = platform.system()
-        if system == "Darwin":  # macOS
-            # Use system installed ChromeDriver
-            chromedriver_path = "/usr/local/bin/chromedriver"
-            if not os.path.exists(chromedriver_path):
-                raise Exception("ChromeDriver not found. Please install it using 'brew install --cask chromedriver'")
-            
-            # Set Chrome binary location
-            chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-            
-            # Create service with system ChromeDriver
-            service = Service(executable_path=chromedriver_path)
-            
-            # Verify ChromeDriver permissions
-            if not os.access(chromedriver_path, os.X_OK):
-                raise Exception(
-                    "ChromeDriver is not executable. Please run these commands in terminal:\n"
-                    "sudo xattr -d com.apple.quarantine /usr/local/bin/chromedriver\n"
-                    "chmod +x /usr/local/bin/chromedriver"
-                )
-        else:
-            # For other operating systems, use webdriver_manager
-            service = Service(ChromeDriverManager().install())
-            
+        chrome_options.add_argument('--no-sandbox')
+        chrome_options.add_argument('--disable-dev-shm-usage')
+        self.driver = webdriver.Chrome(options=chrome_options)
+        self.driver.set_window_size(1200, 800)
+
+    def login(self, log_signal):
+        """Log in to Instagram"""
         try:
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            return driver
+            self.driver.get('https://www.instagram.com/')
+            time.sleep(2)
+            
+            log_signal.emit("Logging in to Instagram...")
+
+            # Find and fill username field
+            username_field = self.driver.find_element(By.NAME, 'username')
+            if username_field:
+                username_field.clear()
+                username_field.send_keys(self.username)
+            else:
+                log_signal.emit("❌ Could not find username field")
+                return False
+
+            # Find and fill password field
+            password_field = self.driver.find_element(By.NAME, 'password')
+            if password_field:
+                password_field.clear()
+                password_field.send_keys(self.password)
+            else:
+                log_signal.emit("❌ Could not find password field")
+                return False
+
+            # Click login button
+            login_button = self.driver.find_element(By.XPATH, "//button[@type='submit']")
+            if login_button:
+                login_button.click()
+                time.sleep(3)  # Wait for login
+                log_signal.emit("Successfully logged in!")
+                return True
+            else:
+                log_signal.emit("❌ Could not find login button")
+                return False
+
         except Exception as e:
-            error_msg = str(e)
-            if "chromedriver" in error_msg.lower() and system == "Darwin":
-                raise Exception(
-                    "ChromeDriver security issue detected. Please run these commands in terminal:\n"
-                    "sudo xattr -d com.apple.quarantine /usr/local/bin/chromedriver\n"
-                    "chmod +x /usr/local/bin/chromedriver"
-                )
-            raise Exception(f"Failed to initialize Chrome driver: {error_msg}")
+            log_signal.emit(f"❌ Login error: {str(e)}")
+            return False
 
     def load_followed_users(self):
         try:
@@ -150,42 +157,35 @@ class InstagramBot:
         except Exception as e:
             print(f"Error saving followed users: {str(e)}")
 
-    def login(self, log_signal):
+    def find_element(self, by, value):
+        """Find element in either regular driver or embedded browser"""
         try:
-            log_signal.emit("Logging in to Instagram...")
-            self.driver.get('https://www.instagram.com/accounts/login/')
-            time.sleep(2)
+            return self.driver.find_element(by, value)
+        except:
+            return None
 
-            # Enter username
-            username_input = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.NAME, "username"))
-            )
-            username_input.send_keys(self.username)
+    def find_elements(self, by, value):
+        """Find elements in either regular driver or embedded browser"""
+        try:
+            return self.driver.find_elements(by, value)
+        except:
+            return []
 
-            # Enter password
-            password_input = self.driver.find_element(By.NAME, "password")
-            password_input.send_keys(self.password)
+    def click_element(self, element):
+        """Click element in either regular driver or embedded browser"""
+        try:
+            self.driver.execute_script("arguments[0].click();", element)
+            return True
+        except:
+            return False
 
-            # Click login button
-            login_button = self.driver.find_element(By.CSS_SELECTOR, "button[type='submit']")
-            login_button.click()
-
-            # Wait for login to complete
-            time.sleep(5)
-            
-            # Check for successful login
-            try:
-                WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.CSS_SELECTOR, "svg[aria-label='Home']"))
-                )
-                log_signal.emit("Successfully logged in!")
-                return True
-            except TimeoutException:
-                log_signal.emit("Login failed - please check your credentials")
-                return False
-
-        except Exception as e:
-            log_signal.emit(f"Error during login: {str(e)}")
+    def navigate_to(self, url):
+        """Navigate to URL in either regular driver or embedded browser"""
+        try:
+            self.driver.get(url)
+            time.sleep(1.5)
+            return True
+        except:
             return False
 
     def load_attempted_follows(self):
@@ -473,69 +473,63 @@ class InstagramBot:
         try:
             # Navigate to user's profile
             self.driver.get(f'https://www.instagram.com/{username}/')
-            time.sleep(3)  # Increased wait time for page load
+            time.sleep(1.5)  # Reduced wait time
 
             # Debug: Log the page title and URL
-            log_signal.emit(f"📍 Navigated to profile: {self.driver.current_url}")
+            log_signal.emit(f"📍 Navigating to: {username}")
 
-            # First verify we're actually following this user
-            following_status = self.verify_following_status(username, log_signal)
-            if not following_status:
-                log_signal.emit(f"⚠️ Not currently following {username}")
-                return False
-
-            # Find the Following/Requested button
-            unfollow_button = self.find_following_button(log_signal)
-            if not unfollow_button:
-                log_signal.emit(f"❌ Could not find Following button for {username}")
-                return False
-
-            # Click the Following button to open the menu
+            # Find the Following/Requested button (handle both cases)
+            button = None
             try:
-                log_signal.emit("🖱️ Clicking Following button...")
-                self.driver.execute_script("arguments[0].scrollIntoView(true);", unfollow_button)
-                time.sleep(1)
-                self.driver.execute_script("arguments[0].click();", unfollow_button)
-                time.sleep(2)  # Wait for menu to appear
-            except Exception as e:
-                log_signal.emit(f"❌ Failed to click Following button: {str(e)}")
-                return False
-
-            # Find and click the Unfollow button in the menu
-            try:
-                log_signal.emit("🔍 Looking for Unfollow option in menu...")
-                # Get all buttons in the menu
-                menu_buttons = self.driver.find_elements(By.TAG_NAME, "button")
-                unfollow_option = None
-                
-                # Find the Unfollow button (usually the last/bottom one)
-                for button in menu_buttons:
-                    if button.is_displayed() and button.text.strip().lower() == "unfollow":
-                        unfollow_option = button
+                # Try to find any button containing either "Following" or "Requested"
+                buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                for b in buttons:
+                    if b.is_displayed() and b.text.strip().lower() in ['following', 'requested']:
+                        button = b
                         break
-                
-                if unfollow_option:
-                    log_signal.emit("🖱️ Clicking Unfollow...")
-                    self.driver.execute_script("arguments[0].click();", unfollow_option)
-                    time.sleep(2)
-                else:
-                    log_signal.emit("❌ Could not find Unfollow option in menu")
-                    return False
-                
-            except Exception as e:
-                log_signal.emit(f"❌ Failed to click Unfollow: {str(e)}")
-                return False
 
-            # Verify unfollow was successful
-            if self.verify_unfollow_success(username, log_signal):
-                log_signal.emit(f"✅ Successfully unfollowed {username}")
-                return True
-            else:
-                log_signal.emit(f"❌ Could not verify unfollow for {username}")
+                if not button:
+                    log_signal.emit(f"❌ Could not find Following/Requested button for {username}")
+                    return False
+
+                # Click the button to open the menu
+                log_signal.emit("🖱️ Opening menu...")
+                self.driver.execute_script("arguments[0].click();", button)
+                time.sleep(0.5)  # Short wait for menu
+
+                # Find and click the Unfollow button in the menu
+                menu_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                unfollow_button = None
+                
+                for btn in menu_buttons:
+                    if btn.is_displayed() and btn.text.strip().lower() == "unfollow":
+                        unfollow_button = btn
+                        break
+
+                if unfollow_button:
+                    log_signal.emit("🖱️ Clicking Unfollow...")
+                    self.driver.execute_script("arguments[0].click();", unfollow_button)
+                    time.sleep(0.5)  # Short wait for unfollow to complete
+                    
+                    # Quick verification
+                    buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                    for btn in buttons:
+                        if btn.is_displayed() and btn.text.strip().lower() in ['follow', 'follow back']:
+                            log_signal.emit(f"✅ Successfully unfollowed {username}")
+                            return True
+                    
+                    log_signal.emit(f"⚠️ Could not verify unfollow for {username}")
+                    return False
+                else:
+                    log_signal.emit(f"❌ Could not find Unfollow button for {username}")
+                    return False
+
+            except Exception as e:
+                log_signal.emit(f"❌ Error during unfollow process: {str(e)}")
                 return False
 
         except Exception as e:
-            log_signal.emit(f"❌ Error unfollowing {username}: {str(e)}")
+            log_signal.emit(f"❌ Error accessing profile {username}: {str(e)}")
             return False
 
     def find_following_button(self, log_signal):
@@ -769,24 +763,39 @@ class InstagramBot:
                 self.driver.quit()
 
     def run_unfollow(self, log_signal):
-        """Run the unfollow operation"""
+        """Run the unfollow operation with optimized performance"""
         try:
             self.init_driver()
             if not self.login(log_signal):
                 return []
 
             successfully_unfollowed = []
+            failed_attempts = []
 
             for username in self.target_accounts:
                 if not self.is_running:
                     break
 
-                if self.unfollow_user(username, log_signal):
-                    successfully_unfollowed.append(username)
-                    # Random delay between unfollows
-                    delay = random.uniform(self.min_delay, self.max_delay)
-                    log_signal.emit(f"⏳ Waiting {delay:.1f} seconds...")
+                try:
+                    if self.unfollow_user(username, log_signal):
+                        successfully_unfollowed.append(username)
+                    else:
+                        failed_attempts.append(username)
+                    
+                    # Randomized shorter delay between unfollows
+                    delay = random.uniform(self.min_delay / 2, self.max_delay / 2)
+                    log_signal.emit(f"⏳ Short wait ({delay:.1f}s)...")
                     time.sleep(delay)
+
+                except Exception as e:
+                    log_signal.emit(f"❌ Error processing {username}: {str(e)}")
+                    failed_attempts.append(username)
+
+            # Log summary
+            if failed_attempts:
+                log_signal.emit("\n⚠️ Failed to unfollow these accounts:")
+                for username in failed_attempts:
+                    log_signal.emit(f"- {username}")
 
             return successfully_unfollowed
 
@@ -802,13 +811,6 @@ class InstagramBot:
         if self.driver:
             self.driver.quit()
             self.driver = None 
-
-    def init_driver(self):
-        options = webdriver.ChromeOptions()
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        self.driver = webdriver.Chrome(options=options)
-        self.driver.implicitly_wait(10)
 
     def export_followed_users(self, usernames, log_signal):
         """Export followed users to CSV with explicit path"""
