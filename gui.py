@@ -140,14 +140,22 @@ class InstagramAutomationGUI(QMainWindow):
         unfollow_delay_range = QHBoxLayout()
         self.min_unfollow_delay = QDoubleSpinBox()
         self.min_unfollow_delay.setRange(1, 3600)
-        self.min_unfollow_delay.setValue(30)
+        self.min_unfollow_delay.setValue(5)  # Much shorter default for unfollow
+        self.min_unfollow_delay.setToolTip("Minimum delay between unfollows. Shorter delays are generally safe since unfollowing is less restricted than following.")
         self.max_unfollow_delay = QDoubleSpinBox()
         self.max_unfollow_delay.setRange(1, 3600)
-        self.max_unfollow_delay.setValue(60)
+        self.max_unfollow_delay.setValue(15)  # Much shorter default for unfollow
+        self.max_unfollow_delay.setToolTip("Maximum delay between unfollows. Shorter delays are generally safe since unfollowing is less restricted than following.")
         unfollow_delay_range.addWidget(self.min_unfollow_delay)
         unfollow_delay_range.addWidget(QLabel('to'))
         unfollow_delay_range.addWidget(self.max_unfollow_delay)
         unfollow_delay_layout.addLayout(unfollow_delay_range)
+        
+        # Add helpful note about unfollow delays
+        unfollow_note = QLabel('💡 Tip: Shorter delays are typically safe for unfollows (5-15s recommended)')
+        unfollow_note.setStyleSheet("color: #666; font-style: italic; font-size: 10px;")
+        unfollow_delay_layout.addWidget(unfollow_note)
+        
         unfollow_layout.addLayout(unfollow_delay_layout)
 
         # Status log for Unfollow

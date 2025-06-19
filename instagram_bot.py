@@ -783,7 +783,7 @@ class InstagramBot:
 
                 if self.unfollow_user(username, log_signal):
                     successfully_unfollowed.append(username)
-                    # Random delay between unfollows
+                    # Use the configured unfollow delays from GUI
                     delay = random.uniform(self.min_delay, self.max_delay)
                     log_signal.emit(f"⏳ Waiting {delay:.1f} seconds...")
                     time.sleep(delay)
