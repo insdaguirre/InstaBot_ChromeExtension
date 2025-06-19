@@ -372,11 +372,23 @@ class InstagramAutomationGUI(QMainWindow):
         if file_name:
             try:
                 usernames = []
+                invalid_usernames = []
+                
                 with open(file_name, 'r') as f:
                     reader = csv.reader(f)
-                    for row in reader:
+                    for i, row in enumerate(reader):
                         if row:  # Skip empty rows
-                            usernames.append(row[0].strip())
+                            username = row[0].strip()
+                            
+                            # Skip common header names
+                            if username.lower() in ['username', 'user', 'account', 'name', 'handle']:
+                                continue
+                            
+                            # Basic username validation
+                            if self.is_valid_username(username):
+                                usernames.append(username)
+                            else:
+                                invalid_usernames.append(username)
                 
                 # Update the GUI
                 self.csv_file_label.setText(f"Selected file: {file_name}")
@@ -386,8 +398,11 @@ class InstagramAutomationGUI(QMainWindow):
                 # Store the usernames
                 self.unfollow_accounts = usernames
                 
-                # Log success
-                self.log(f"✅ Successfully imported {len(usernames)} usernames from CSV", 'unfollow')
+                # Log success and any issues
+                self.log(f"✅ Successfully imported {len(usernames)} valid usernames from CSV", 'unfollow')
+                
+                if invalid_usernames:
+                    self.log(f"⚠️ Skipped {len(invalid_usernames)} invalid usernames: {invalid_usernames[:5]}", 'unfollow')
                 
             except Exception as e:
                 self.csv_file_label.setText("Error importing file")
@@ -398,6 +413,26 @@ class InstagramAutomationGUI(QMainWindow):
             self.csv_file_label.setText("No file selected")
             self.csv_file_label.setStyleSheet("color: red")
             self.unfollow_button.setEnabled(False)
+
+    def is_valid_username(self, username):
+        """Check if username is valid for Instagram"""
+        if not username or len(username) < 1:
+            return False
+        
+        # Instagram usernames can only contain letters, numbers, periods, and underscores
+        import re
+        if not re.match(r'^[a-zA-Z0-9._]+$', username):
+            return False
+        
+        # Must be between 1 and 30 characters
+        if len(username) > 30:
+            return False
+        
+        # Can't be just numbers or just periods
+        if username.isdigit() or username.replace('.', '') == '':
+            return False
+        
+        return True
 
     def export_followed_users(self, usernames):
         try:
