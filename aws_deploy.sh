@@ -56,19 +56,45 @@ echo "deb [arch=amd64 signed-by=/usr/share/keyrings/googlechrome-linux-keyring.g
 sudo apt-get update -y
 sudo apt-get install -y google-chrome-stable
 
-# Install ChromeDriver
-CHROME_VERSION=$(google-chrome --version | awk '{print $3}' | cut -d'.' -f1)
+# Install ChromeDriver using new method (Chrome 115+)
+CHROME_VERSION=$(google-chrome --version | awk '{print $3}')
 print_status "Chrome version: $CHROME_VERSION"
 
-# Download ChromeDriver
-CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$CHROME_VERSION")
-print_status "Installing ChromeDriver version: $CHROMEDRIVER_VERSION"
+# For Chrome 115+, use the new ChromeDriver API
+MAJOR_VERSION=$(echo $CHROME_VERSION | cut -d'.' -f1)
+print_status "Chrome major version: $MAJOR_VERSION"
 
-wget -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
-unzip /tmp/chromedriver.zip -d /tmp/
-sudo mv /tmp/chromedriver /usr/local/bin/
-sudo chmod +x /usr/local/bin/chromedriver
-rm /tmp/chromedriver.zip
+if [ "$MAJOR_VERSION" -ge 115 ]; then
+    print_status "Using new ChromeDriver API for Chrome $MAJOR_VERSION"
+    
+    # Get the latest ChromeDriver version for this Chrome version
+    CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_$MAJOR_VERSION")
+    
+    if [ -z "$CHROMEDRIVER_VERSION" ] || [ "$CHROMEDRIVER_VERSION" = "Not Found" ]; then
+        print_warning "ChromeDriver not found for Chrome $MAJOR_VERSION, using stable release"
+        CHROMEDRIVER_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_STABLE")
+    fi
+    
+    print_status "Installing ChromeDriver version: $CHROMEDRIVER_VERSION"
+    
+    # Download from new location
+    wget -O /tmp/chromedriver.zip "https://storage.googleapis.com/chrome-for-testing-public/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"
+    unzip /tmp/chromedriver.zip -d /tmp/
+    sudo mv /tmp/chromedriver-linux64/chromedriver /usr/local/bin/
+    sudo chmod +x /usr/local/bin/chromedriver
+    rm -rf /tmp/chromedriver.zip /tmp/chromedriver-linux64
+else
+    print_status "Using legacy ChromeDriver API for Chrome $MAJOR_VERSION"
+    # Fallback to old method for older Chrome versions
+    CHROMEDRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_$MAJOR_VERSION")
+    print_status "Installing ChromeDriver version: $CHROMEDRIVER_VERSION"
+    
+    wget -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
+    unzip /tmp/chromedriver.zip -d /tmp/
+    sudo mv /tmp/chromedriver /usr/local/bin/
+    sudo chmod +x /usr/local/bin/chromedriver
+    rm /tmp/chromedriver.zip
+fi
 
 # Verify ChromeDriver installation
 print_status "ChromeDriver installed at: $(which chromedriver)"
