@@ -17,6 +17,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from config import get_credentials, get_automation_settings
 
 class InstagramBot:
     def __init__(self, username, password, target_accounts, users_per_account=25):
@@ -398,23 +399,31 @@ class InstagramBot:
 
 def main():
     """Main function"""
-    # Configuration
-    USERNAME = "deegz.mp3"
-    PASSWORD = "b@seb@ll"  # Replace with your actual password
-    TARGET_ACCOUNTS = ["1001tracklists", "housemusic.us", "housemusicnerds", "edm"]
-    USERS_PER_ACCOUNT = 25
-    
-    # Create bot instance
-    bot = InstagramBot(USERNAME, PASSWORD, TARGET_ACCOUNTS, USERS_PER_ACCOUNT)
-    
-    # Run automation cycle
-    success = bot.run_automation_cycle()
-    
-    if success:
-        stats = bot.get_stats()
-        print(f"📊 Current stats: {stats}")
-    
-    return success
+    try:
+        # Get configuration from secure config system
+        username, password = get_credentials()
+        settings = get_automation_settings()
+        
+        # Create bot instance
+        bot = InstagramBot(
+            username, 
+            password, 
+            settings['target_accounts'], 
+            settings['users_per_account']
+        )
+        
+        # Run automation cycle
+        success = bot.run_automation_cycle()
+        
+        if success:
+            stats = bot.get_stats()
+            print(f"📊 Current stats: {stats}")
+        
+        return success
+        
+    except Exception as e:
+        print(f"❌ Error in main: {str(e)}")
+        return False
 
 if __name__ == "__main__":
     main() 

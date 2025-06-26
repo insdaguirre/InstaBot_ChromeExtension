@@ -32,12 +32,16 @@ def test_instagram_bot():
         driver.get('https://www.instagram.com/accounts/login/')
         time.sleep(3)
         
+        # Get credentials from secure config
+        from config import get_credentials
+        username, password = get_credentials()
+        
         username_input = driver.find_element(By.NAME, "username")
-        username_input.send_keys("deegz.mp3")
+        username_input.send_keys(username)
         time.sleep(1)
         
         password_input = driver.find_element(By.NAME, "password")
-        password_input.send_keys("b@seb@ll")
+        password_input.send_keys(password)
         time.sleep(1)
         
         login_button = driver.find_element(By.XPATH, "//button[@type='submit']")

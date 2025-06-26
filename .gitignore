@@ -38,6 +38,14 @@ followed_users.backup.json
 *.log
 chromedriver*
 
+# Sensitive configuration files
+config.json
+.env
+settings.json
+*_credentials.json
+*.pem
+*.key
+
 # macOS
 .DS_Store
 .AppleDouble
