@@ -1,62 +1,74 @@
-# Instagram Automation Tool
+# Instagram Automation System
 
-A GUI-based tool for automating Instagram following/unfollowing with customizable delays and targets.
+🤖 **Automated Instagram follower management for music niche accounts**
 
-## Features
+## 🚀 Current Working System
 
-- User-friendly GUI interface
-- Multiple target account support
-- Customizable follow/unfollow delays
-- Automatic unfollowing after specified delay
-- Progress logging
-- Settings persistence
-- Rate limit avoidance
+This is the **CLEAN, FUNCTIONAL VERSION** after extensive development and testing.
 
-## Installation
+### ✅ What's Working (AWS Deployed)
 
-1. Make sure you have Python 3.8+ installed
-2. Clone this repository
-3. Install the required packages:
+**🎯 Core Files:**
+- `complete_instagram_bot.py` - Main automation bot (proven working)
+- `scheduler.py` - Automated scheduling service  
+- `dashboard.py` - Web dashboard for monitoring
+- `test_bot.py` - Quick functionality tests
+
+**🛠️ Deployment:**
+- `setup_new_instance.sh` - Complete AWS instance setup
+- `DEPLOYMENT_ROADMAP.md` - Step-by-step deployment guide
+- `deploy_complete_system.sh` - Automated deployment script
+- `cleanup_aws.sh` - AWS cleanup utilities
+
+**📊 Configuration:**
+- `settings.json` - Instagram credentials
+- `requirements.txt` - Python dependencies
+
+## 🎯 Current Configuration
+
+- **Target accounts:** `1001tracklists`, `housemusic.us`, `housemusicnerds`, `edm`
+- **Daily follows:** 100 (25 per account)
+- **Auto-unfollow:** 48 hours
+- **Schedule:** Twice daily (10 AM & 6 PM UTC)
+- **Platform:** AWS EC2 (needs t3.small+ for memory)
+
+## 🌐 Live Dashboard
+
+**URL:** `http://ec2-3-17-165-195.us-east-2.compute.amazonaws.com:5000`
+
+## 📁 Archive Structure
+
+All non-functional/experimental code moved to `archive/`:
+- `archive/old_versions/` - Previous AWS attempts
+- `archive/cloud_attempts/` - Oracle/GCP experiments  
+- `archive/local_versions/` - Local development versions
+- `archive/failed_experiments/` - Experimental scripts
+- `archive/documentation/` - Outdated documentation
+
+## 🚨 Known Issues
+
+- **Memory limitation:** Current t2.micro (957MB RAM) insufficient for Instagram's memory requirements
+- **Solution:** Deploy to t3.small (2GB RAM) for stable operation
+
+## 🛠️ Quick Deploy
+
 ```bash
-pip install -r requirements.txt
+# 1. Ensure SSH key exists
+ls instagram-automation-key-new.pem
+
+# 2. Deploy to fresh AWS instance
+./setup_new_instance.sh
+
+# 3. Monitor via dashboard
+open http://YOUR-INSTANCE:5000
 ```
 
-## Usage
+## 📈 Status
 
-1. Run the application:
-```bash
-python gui.py
-```
+✅ **Scheduler:** Running  
+✅ **Dashboard:** Accessible  
+✅ **Login/Navigation:** Working  
+⚠️ **Follower collection:** Needs more RAM
 
-2. Enter your Instagram credentials
-3. Add target accounts (one per line)
-4. Configure settings:
-   - Number of users to follow per account
-   - Follow delay range (in seconds)
-   - Unfollow delay (in hours)
-5. Click Start to begin automation
-
-## Important Notes
-
-- Use this tool responsibly and in accordance with Instagram's terms of service
-- Recommended delays: 30-60 seconds between follows
-- Keep daily follow counts reasonable to avoid restrictions
-- The tool saves followed users and their timestamps for proper unfollow scheduling
-- You can stop the automation at any time by clicking the Stop button
-
-## Files
-
-- `gui.py`: Main GUI application
-- `instagram_bot.py`: Instagram automation logic
-- `followed_users.json`: Tracks followed users (created automatically)
-- `settings.json`: Saves your settings (created automatically)
-
-## Requirements
-
-- Python 3.8+
-- Chrome browser
-- Stable internet connection
-
-## Disclaimer
-
-This tool is for educational purposes only. Use at your own risk. The authors are not responsible for any account restrictions or bans that may result from using this tool. 
+---
+*Last updated: June 26, 2025* 
