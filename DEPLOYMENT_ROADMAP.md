@@ -484,4 +484,7 @@ curl ifconfig.me
 
 **Monitor at:** `http://ec2-3-128-30-19.us-east-2.compute.amazonaws.com:5000`
 
-**Check status anytime:** `ssh -i instagram-automation-key.pem ubuntu@ec2-3-128-30-19.us-east-2.compute.amazonaws.com 'cd ~/instabot && ./status.sh'` 
+**Check status anytime:** `ssh -i instagram-automation-key.pem ubuntu@ec2-3-128-30-19.us-east-2.compute.amazonaws.com 'cd ~/instabot && ./status.sh'`
+
+# Run the git history cleaning script
+./clean_git_history.sh 
