@@ -1,0 +1,19 @@
+{
+  "instagram_username": "",
+  "instagram_password": "",
+  "target_accounts": [
+    "example_account1",
+    "example_account2",
+    "example_account3",
+    "example_account4"
+  ],
+  "daily_follow_limit": 100,
+  "followers_per_account": 50,
+  "accounts_per_batch": 2,
+  "unfollow_delay_hours": 48,
+  "follow_schedule": "10:00",
+  "unfollow_schedule": "22:00",
+  "min_delay_between_follows": 30,
+  "max_delay_between_follows": 120,
+  "enabled": false
+}

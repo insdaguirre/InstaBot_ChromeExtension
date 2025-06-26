@@ -86,21 +86,10 @@ class InstagramAutomationGUI(QMainWindow):
         follow_count_layout.addWidget(self.follow_count)
         settings_layout.addLayout(follow_count_layout)
 
-        # Follow delay range
-        follow_delay_layout = QVBoxLayout()
-        follow_delay_layout.addWidget(QLabel('Follow Delay Range (seconds):'))
-        delay_layout = QHBoxLayout()
-        self.min_follow_delay = QDoubleSpinBox()
-        self.min_follow_delay.setRange(1, 3600)
-        self.min_follow_delay.setValue(30)
-        self.max_follow_delay = QDoubleSpinBox()
-        self.max_follow_delay.setRange(1, 3600)
-        self.max_follow_delay.setValue(60)
-        delay_layout.addWidget(self.min_follow_delay)
-        delay_layout.addWidget(QLabel('to'))
-        delay_layout.addWidget(self.max_follow_delay)
-        follow_delay_layout.addLayout(delay_layout)
-        settings_layout.addLayout(follow_delay_layout)
+        # Note about automatic delays
+        delay_note = QLabel('ℹ️ Delays are automatically optimized for safety and speed')
+        delay_note.setStyleSheet("color: #666; font-style: italic; font-size: 11px; padding: 5px;")
+        settings_layout.addWidget(delay_note)
 
         follow_layout.addLayout(settings_layout)
 
@@ -134,29 +123,10 @@ class InstagramAutomationGUI(QMainWindow):
         self.csv_file_label.setWordWrap(True)  # Enable word wrap for long paths
         unfollow_layout.addWidget(self.csv_file_label)
 
-        # Delay settings for Unfollow
-        unfollow_delay_layout = QVBoxLayout()
-        unfollow_delay_layout.addWidget(QLabel('Unfollow Delay Range (seconds):'))
-        unfollow_delay_range = QHBoxLayout()
-        self.min_unfollow_delay = QDoubleSpinBox()
-        self.min_unfollow_delay.setRange(1, 3600)
-        self.min_unfollow_delay.setValue(5)  # Much shorter default for unfollow
-        self.min_unfollow_delay.setToolTip("Minimum delay between unfollows. Shorter delays are generally safe since unfollowing is less restricted than following.")
-        self.max_unfollow_delay = QDoubleSpinBox()
-        self.max_unfollow_delay.setRange(1, 3600)
-        self.max_unfollow_delay.setValue(15)  # Much shorter default for unfollow
-        self.max_unfollow_delay.setToolTip("Maximum delay between unfollows. Shorter delays are generally safe since unfollowing is less restricted than following.")
-        unfollow_delay_range.addWidget(self.min_unfollow_delay)
-        unfollow_delay_range.addWidget(QLabel('to'))
-        unfollow_delay_range.addWidget(self.max_unfollow_delay)
-        unfollow_delay_layout.addLayout(unfollow_delay_range)
-        
-        # Add helpful note about unfollow delays
-        unfollow_note = QLabel('💡 Tip: Shorter delays are typically safe for unfollows (5-15s recommended)')
-        unfollow_note.setStyleSheet("color: #666; font-style: italic; font-size: 10px;")
-        unfollow_delay_layout.addWidget(unfollow_note)
-        
-        unfollow_layout.addLayout(unfollow_delay_layout)
+        # Note about automatic delays
+        unfollow_delay_note = QLabel('ℹ️ Delays are automatically optimized for speed and safety')
+        unfollow_delay_note.setStyleSheet("color: #666; font-style: italic; font-size: 11px; padding: 5px;")
+        unfollow_layout.addWidget(unfollow_delay_note)
 
         # Status log for Unfollow
         unfollow_layout.addWidget(QLabel('Status:'))
@@ -255,21 +225,15 @@ class InstagramAutomationGUI(QMainWindow):
                 QMessageBox.warning(self, 'Error', 'Please enter at least one target account.')
                 return
 
-            if self.min_follow_delay.value() >= self.max_follow_delay.value():
-                QMessageBox.warning(self, 'Error', 'Maximum delay must be greater than minimum delay.')
-                return
-
             # Save settings
             self.save_settings()
 
-            # Create bot instance for following
+            # Create bot instance for following (delays are now automatic)
             self.bot = InstagramBot(
                 username=self.username_input.text(),
                 password=self.password_input.text(),
                 target_accounts=target_accounts,
                 users_per_account=self.follow_count.value(),
-                min_delay=self.min_follow_delay.value(),
-                max_delay=self.max_follow_delay.value(),
                 unfollow_delay=0  # Not used for following
             )
 
@@ -287,18 +251,12 @@ class InstagramAutomationGUI(QMainWindow):
                 QMessageBox.warning(self, 'Error', 'Please enter your Instagram credentials.')
                 return
 
-            if self.min_unfollow_delay.value() >= self.max_unfollow_delay.value():
-                QMessageBox.warning(self, 'Error', 'Maximum delay must be greater than minimum delay.')
-                return
-
-            # Create bot instance for unfollowing
+            # Create bot instance for unfollowing (delays are now automatic)
             self.bot = InstagramBot(
                 username=self.username_input.text(),
                 password=self.password_input.text(),
                 target_accounts=self.unfollow_accounts,  # Used as unfollow list
                 users_per_account=0,  # Not used for unfollowing
-                min_delay=self.min_unfollow_delay.value(),
-                max_delay=self.max_unfollow_delay.value(),
                 unfollow_delay=0  # Not used here
             )
 
@@ -320,11 +278,15 @@ class InstagramAutomationGUI(QMainWindow):
     def automation_finished(self, action_type, processed_accounts):
         if action_type == 'follow':
             self.follow_button.setEnabled(True)
-            # Export followed users to CSV
+            # Export followed users to CSV - ONE FILE PER BATCH
             if processed_accounts:
+                self.log(f"🎉 Batch completed! Successfully processed {len(processed_accounts)} accounts", action_type)
                 self.export_followed_users(processed_accounts)
+                self.log(f"💾 CSV export completed - single batch file created", action_type)
         else:
             self.unfollow_button.setEnabled(True)
+            if processed_accounts:
+                self.log(f"🎉 Unfollow batch completed! Successfully processed {len(processed_accounts)} accounts", action_type)
             
         # Log the action
         self.log_action(action_type, processed_accounts)
@@ -336,9 +298,11 @@ class InstagramAutomationGUI(QMainWindow):
             QMessageBox.information(
                 self, 
                 'Complete', 
-                f'{action_type.capitalize()} operation completed.\n\n'
-                f'CSV exports can be found in:\n{csv_path}\n\n'
-                f'Log files can be found in:\n{self.data_dir / "logs"}'
+                f'✅ {action_type.capitalize()} operation completed!\n\n'
+                f'📊 Processed: {len(processed_accounts)} accounts\n'
+                f'💾 Single CSV file created (no more spam!)\n\n'
+                f'CSV exports: {csv_path}\n'
+                f'Log files: {self.data_dir / "logs"}'
             )
         else:
             QMessageBox.information(self, 'Complete', f'{action_type.capitalize()} operation completed.')
@@ -348,8 +312,6 @@ class InstagramAutomationGUI(QMainWindow):
             'username': self.username_input.text(),
             'target_accounts': self.accounts_input.toPlainText(),
             'follow_count': self.follow_count.value(),
-            'min_follow_delay': self.min_follow_delay.value(),
-            'max_follow_delay': self.max_follow_delay.value(),
         }
         with open('settings.json', 'w') as f:
             json.dump(settings, f)
@@ -362,8 +324,6 @@ class InstagramAutomationGUI(QMainWindow):
                     self.username_input.setText(settings.get('username', ''))
                     self.accounts_input.setText(settings.get('target_accounts', ''))
                     self.follow_count.setValue(settings.get('follow_count', 50))
-                    self.min_follow_delay.setValue(settings.get('min_follow_delay', 30))
-                    self.max_follow_delay.setValue(settings.get('max_follow_delay', 60))
         except:
             pass
 
@@ -435,33 +395,26 @@ class InstagramAutomationGUI(QMainWindow):
         return True
 
     def export_followed_users(self, usernames):
+        """Export followed users - automatic batch export (no dialog spam)"""
         try:
             # Generate filename with timestamp
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            default_filename = f'followed_users_{timestamp}.csv'
             
-            file_path, _ = QFileDialog.getSaveFileName(
-                self, 
-                "Save Followed Users", 
-                default_filename,
-                "CSV Files (*.csv);;All Files (*)"
-            )
+            # Auto-save to csv_exports directory (no popup dialog)
+            csv_dir = self.data_dir / 'csv_exports'
+            csv_dir.mkdir(exist_ok=True)
+            file_path = csv_dir / f'followed_users_batch_{timestamp}.csv'
             
-            if file_path:
-                with open(file_path, 'w', newline='') as file:
+            with open(file_path, 'w', newline='', encoding='utf-8') as file:
                     writer = csv.writer(file)
-                    writer.writerow(['Username', 'Followed At'])  # Header
+                writer.writerow(['Username', 'Followed At', 'Batch Size'])  # Header
                     for username in usernames:
-                        writer.writerow([username, datetime.now().isoformat()])
+                    writer.writerow([username, datetime.now().isoformat(), len(usernames)])
                 
-                QMessageBox.information(
-                    self, 
-                    'Success', 
-                    f'Successfully exported {len(usernames)} usernames to {file_path}'
-                )
+            self.log(f"💾 Auto-exported {len(usernames)} accounts to: {file_path.name}", 'follow')
                 
         except Exception as e:
-            QMessageBox.critical(self, 'Error', f'Error exporting CSV: {str(e)}')
+            self.log(f"❌ Error auto-exporting CSV: {str(e)}", 'follow')
 
 class BotWorker(QThread):
     log_signal = pyqtSignal(str)

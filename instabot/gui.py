@@ -247,9 +247,7 @@ class InstagramAutomationGUI(QMainWindow):
                 QMessageBox.warning(self, 'Error', 'Please enter at least one target account.')
                 return
 
-            if self.min_follow_delay.value() >= self.max_follow_delay.value():
-                QMessageBox.warning(self, 'Error', 'Maximum delay must be greater than minimum delay.')
-                return
+
 
             # Save settings
             self.save_settings()
@@ -259,20 +257,16 @@ class InstagramAutomationGUI(QMainWindow):
                 QMessageBox.warning(self, 'Error', 'Please import accounts to unfollow from CSV.')
                 return
 
-            if self.min_unfollow_delay.value() >= self.max_unfollow_delay.value():
-                QMessageBox.warning(self, 'Error', 'Maximum delay must be greater than minimum delay.')
-                return
+
 
             target_accounts = self.unfollow_accounts
 
-        # Create bot instance
+        # Create bot instance (delays are now automatically optimized)
         self.bot = InstagramBot(
             username=self.username_input.text(),
             password=self.password_input.text(),
             target_accounts=target_accounts,
-            users_per_account=self.follow_count.value() if action_type == 'follow' else 0,
-            min_delay=self.min_follow_delay.value() if action_type == 'follow' else self.min_unfollow_delay.value(),
-            max_delay=self.max_follow_delay.value() if action_type == 'follow' else self.max_unfollow_delay.value()
+            users_per_account=self.follow_count.value() if action_type == 'follow' else 0
         )
 
         # Create and start worker thread
@@ -324,8 +318,6 @@ class InstagramAutomationGUI(QMainWindow):
             'username': self.username_input.text(),
             'target_accounts': self.accounts_input.toPlainText(),
             'follow_count': self.follow_count.value(),
-            'min_follow_delay': self.min_follow_delay.value(),
-            'max_follow_delay': self.max_follow_delay.value(),
         }
         with open('settings.json', 'w') as f:
             json.dump(settings, f)
@@ -338,8 +330,6 @@ class InstagramAutomationGUI(QMainWindow):
                     self.username_input.setText(settings.get('username', ''))
                     self.accounts_input.setText(settings.get('target_accounts', ''))
                     self.follow_count.setValue(settings.get('follow_count', 50))
-                    self.min_follow_delay.setValue(settings.get('min_follow_delay', 30))
-                    self.max_follow_delay.setValue(settings.get('max_follow_delay', 60))
         except:
             pass
 

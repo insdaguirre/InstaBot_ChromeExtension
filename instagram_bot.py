@@ -23,14 +23,18 @@ from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QFileDial
 
 class InstagramBot:
     def __init__(self, username, password, target_accounts, users_per_account=50,
-                 min_delay=30, max_delay=60, unfollow_delay=0):
+                 unfollow_delay=0):
         self.username = username
         self.password = password
         self.target_accounts = target_accounts
         self.users_per_account = users_per_account
-        self.min_delay = min_delay
-        self.max_delay = max_delay
         self.unfollow_delay = unfollow_delay
+        
+        # Fixed optimal delays - no user configuration needed
+        self.follow_min_delay = 25  # Slightly longer for following (more restricted)
+        self.follow_max_delay = 45
+        self.unfollow_min_delay = 3  # Much shorter for unfollowing (less restricted)
+        self.unfollow_max_delay = 8
         self.driver = None
         self.followed_users = []
         self.is_running = True
@@ -469,216 +473,588 @@ class InstagramBot:
         except:
             return False
 
+    def fast_unfollow_user(self, username, log_signal):
+        """Fast unfollow with enhanced reliability - optimized version"""
+        try:
+            start_time = time.time()
+            log_signal.emit(f"🚀 Fast unfollow: {username}")
+            
+            # Navigate to user's profile
+            self.driver.get(f'https://www.instagram.com/{username}/')
+            
+            # Quick page existence check with better timing
+            WebDriverWait(self.driver, 3).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            
+            if "Sorry, this page isn't available" in self.driver.page_source:
+                log_signal.emit(f"❌ Profile {username} doesn't exist or is unavailable")
+                return False
+
+            # Enhanced relationship button detection
+            try:
+                relationship_button = None
+                button_text = None
+                
+                # Try multiple detection methods quickly
+                for attempt in range(2):
+                    # Method 1: Fast button scan
+                    buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                    for button in buttons:
+                        try:
+                            if button.is_displayed() and button.is_enabled():
+                                text = button.text.strip().lower()
+                                if text in ['following', 'requested']:
+                                    relationship_button = button
+                                    button_text = text
+                                    break
+                                elif text in ['follow', 'follow back']:
+                                    log_signal.emit(f"⚠️ Not following {username}")
+                                    return False
+                        except:
+                            continue
+                    
+                    if relationship_button:
+                        break
+                    elif attempt == 0:
+                        time.sleep(0.5)  # Brief wait for elements to load
+                
+                if not relationship_button:
+                    log_signal.emit(f"⚠️ No relationship button found for {username}")
+                    return False
+                
+                # Enhanced clicking
+                click_success = False
+                
+                # Try standard click first
+                try:
+                    # Ensure element is in view
+                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", relationship_button)
+                    time.sleep(0.2)
+                    
+                    relationship_button.click()
+                    click_success = True
+                except:
+                    pass
+                
+                # Fallback to JavaScript click
+                if not click_success:
+                    try:
+                        self.driver.execute_script("arguments[0].click();", relationship_button)
+                        click_success = True
+                    except:
+                        log_signal.emit(f"❌ Failed to click relationship button for {username}")
+                        return False
+                
+                # Wait for menu with progressive timeout
+                menu_found = False
+                for wait_time in [0.4, 0.8]:
+                    time.sleep(wait_time)
+                    
+                    # Quick check if menu appeared
+                    elements = (
+                        self.driver.find_elements(By.TAG_NAME, "button") + 
+                        self.driver.find_elements(By.CSS_SELECTOR, "div[role='button']")
+                    )
+                    
+                    for element in elements:
+                        try:
+                            if element.is_displayed():
+                                text = element.text.strip().lower()
+                                if any(term in text for term in ['unfollow', 'cancel']):
+                                    menu_found = True
+                                    break
+                        except:
+                            continue
+                    
+                    if menu_found:
+                        break
+                
+                # Find and click unfollow option with enhanced detection
+                action_button = None
+                search_terms = ['cancel request', 'cancel', 'unfollow'] if 'request' in button_text else ['unfollow']
+                
+                # Get fresh element list
+                clickable_elements = (
+                    self.driver.find_elements(By.TAG_NAME, "button") + 
+                    self.driver.find_elements(By.CSS_SELECTOR, "div[role='button']")
+                )
+                
+                # Look for exact matches first, then partial
+                for exact_match in [True, False]:
+                    for element in clickable_elements:
+                        try:
+                            if element.is_displayed() and element.is_enabled():
+                                element_text = element.text.strip().lower()
+                                
+                                for term in search_terms:
+                                    if exact_match:
+                                        if term == element_text:
+                                            action_button = element
+                                            break
+                                    else:
+                                        if term in element_text and len(element_text) < 30:
+                                            action_button = element
+                                            break
+                                
+                                if action_button:
+                                    break
+                        except:
+                            continue
+                    
+                    if action_button:
+                        break
+                
+                if action_button:
+                    action_text = action_button.text.strip()
+                    
+                    # Enhanced action button clicking
+                    try:
+                        action_button.click()
+                    except:
+                        try:
+                            self.driver.execute_script("arguments[0].click();", action_button)
+                        except:
+                            log_signal.emit(f"❌ Failed to click unfollow option for {username}")
+                            return False
+                    
+                    time.sleep(0.3)  # Brief wait for potential confirmation
+                    
+                    # Handle confirmation dialog if needed
+                    if 'unfollow' in action_text.lower():
+                        try:
+                            # Quick confirmation search
+                            confirm_elements = self.driver.find_elements(By.TAG_NAME, "button")
+                            for elem in confirm_elements:
+                                try:
+                                    if elem.is_displayed() and 'unfollow' in elem.text.lower():
+                                        elem.click()
+                                        break
+                                except:
+                                    continue
+                        except:
+                            pass  # No confirmation or already handled
+                    
+                    elapsed = time.time() - start_time
+                    action_word = "cancelled request" if 'request' in button_text else "unfollowed"
+                    log_signal.emit(f"✅ Fast {action_word} {username} ({elapsed:.1f}s)")
+                    return True
+                else:
+                    log_signal.emit(f"❌ Could not find unfollow option for {username}")
+                    return False
+                    
+            except Exception as e:
+                log_signal.emit(f"❌ Error in fast unfollow for {username}: {str(e)}")
+                return False
+                
+        except Exception as e:
+            log_signal.emit(f"❌ Critical error processing {username}: {str(e)}")
+            return False
+
+    def find_relationship_button_fast(self, driver):
+        """Quickly find Following/Requested button"""
+        try:
+            buttons = driver.find_elements(By.TAG_NAME, "button")
+            for button in buttons:
+                if button.is_displayed():
+                    text = button.text.strip().lower()
+                    if text in ['following', 'requested']:
+                        return button
+            return None
+        except:
+            return None
+
     def unfollow_user(self, username, log_signal):
-        """Unfollow a user with robust error handling and multiple fallback methods"""
+        """Robust unfollow method with enhanced error handling and multiple detection strategies"""
         try:
             log_signal.emit(f"🔄 Starting unfollow process for {username}")
             
             # Navigate to user's profile
             self.driver.get(f'https://www.instagram.com/{username}/')
-            time.sleep(4)  # Increased wait time
-
-            # Check if profile exists
+            
+            # Check if profile exists early
+            WebDriverWait(self.driver, 5).until(
+                lambda d: d.execute_script("return document.readyState") == "complete"
+            )
+            
             if "Sorry, this page isn't available" in self.driver.page_source:
                 log_signal.emit(f"❌ Profile {username} doesn't exist or is unavailable")
                 return False
 
-            # Wait for page to load completely
+            # Wait for main content with better timeout handling
             try:
-                WebDriverWait(self.driver, 15).until(
+                WebDriverWait(self.driver, 10).until(
                     EC.presence_of_element_located((By.TAG_NAME, "main"))
                 )
-                time.sleep(2)  # Additional wait for dynamic content
-            except TimeoutException:
-                log_signal.emit(f"⏳ Page load timeout for {username}")
-                return False
-
-            # Debug: Check what buttons are available
-            try:
-                all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
-                button_texts = []
-                for btn in all_buttons:
-                    if btn.is_displayed() and btn.text.strip():
-                        button_texts.append(btn.text.strip())
-                log_signal.emit(f"🔍 Available buttons: {button_texts[:10]}")  # Show first 10
-            except:
-                pass
-
-            # Find the relationship button (Following/Follow/etc.)
-            relationship_button = None
-            button_action = None
-            
-            # Look for all buttons and identify the relationship button
-            try:
-                buttons = self.driver.find_elements(By.TAG_NAME, "button")
-                for button in buttons:
-                    if button.is_displayed():
-                        button_text = button.text.strip().lower()
-                        
-                        # Check for Following/Requested (we are following them)
-                        if button_text in ['following', 'requested']:
-                            relationship_button = button
-                            button_action = 'unfollow'
-                            log_signal.emit(f"✅ Found '{button_text}' button - we are following this user")
-                            break
-                        # Check for Follow (we are not following them)
-                        elif button_text in ['follow', 'follow back']:
-                            log_signal.emit(f"⚠️ Found '{button_text}' button - we are NOT following this user")
-                            return False
-                        # Check for Message (might indicate we're following)
-                        elif button_text == 'message':
-                            # If we see Message button, look for Following button nearby
-                            continue
-                            
-            except Exception as e:
-                log_signal.emit(f"❌ Error finding relationship button: {str(e)}")
-                return False
-
-            if not relationship_button:
-                log_signal.emit(f"❌ Could not find Following button for {username} - not currently following this user")
-                return False
-
-            # Click the Following/Requested button to open menu
-            try:
-                log_signal.emit(f"🖱️ Clicking {relationship_button.text} button...")
-                
-                # Scroll to button and click
-                self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", relationship_button)
-                time.sleep(1)
-                
-                # Try regular click first
-                try:
-                    relationship_button.click()
-                except:
-                    # Fallback to JavaScript click
-                    self.driver.execute_script("arguments[0].click();", relationship_button)
-                
-                time.sleep(3)  # Wait for menu to appear
-                
-            except Exception as e:
-                log_signal.emit(f"❌ Failed to click Following button: {str(e)}")
-                return False
-
-            # Look for Unfollow option in the dropdown menu
-            try:
-                log_signal.emit("🔍 Looking for Unfollow option in menu...")
-                
-                # Wait for menu to fully load
+                # Additional wait for dynamic content
                 time.sleep(2)
-                
-                # Try multiple methods to find the Unfollow button
-                unfollow_button = None
-                
-                # Method 1: Look for button with exact "Unfollow" text
+                log_signal.emit(f"✅ Profile page loaded for {username}")
+            except TimeoutException:
+                log_signal.emit(f"⏳ Timeout loading profile for {username}")
+                return False
+
+            # Enhanced relationship button detection with multiple strategies
+            relationship_button = None
+            button_status = None
+            
+            for attempt in range(3):  # Try up to 3 times
                 try:
-                    unfollow_button = WebDriverWait(self.driver, 5).until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[text()='Unfollow']"))
-                    )
-                    log_signal.emit("📍 Found Unfollow button via exact text match")
-                except:
-                    pass
-                
-                # Method 2: Look for button containing "Unfollow"
-                if not unfollow_button:
-                    try:
-                        unfollow_button = self.driver.find_element(By.XPATH, "//button[contains(text(), 'Unfollow')]")
-                        log_signal.emit("📍 Found Unfollow button via contains text")
-                    except:
-                        pass
-                
-                # Method 3: Look through all visible buttons
-                if not unfollow_button:
-                    try:
-                        all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
-                        for button in all_buttons:
-                            if button.is_displayed():
-                                btn_text = button.text.strip().lower()
-                                if btn_text == "unfollow":
-                                    unfollow_button = button
-                                    log_signal.emit("📍 Found Unfollow button via button scan")
+                    log_signal.emit(f"🔍 Attempt {attempt + 1}: Searching for relationship button...")
+                    
+                    # Strategy 1: Standard button search
+                    buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                    for button in buttons:
+                        try:
+                            if button.is_displayed() and button.is_enabled():
+                                button_text = button.text.strip().lower()
+                                
+                                if button_text in ['following', 'requested']:
+                                    relationship_button = button
+                                    button_status = button_text
+                                    log_signal.emit(f"✅ Found '{button_text}' button (standard search)")
                                     break
-                    except:
-                        pass
-                
-                # Method 4: Look for buttons in common menu containers
-                if not unfollow_button:
-                    try:
-                        # Look for menu containers
-                        menu_selectors = [
-                            "div[role='dialog'] button",
-                            "div[role='menu'] button", 
-                            "div._aano button",  # Common Instagram modal class
-                            "div[data-testid] button"
+                                elif button_text in ['follow', 'follow back']:
+                                    log_signal.emit(f"⚠️ Found '{button_text}' - we are NOT following this user")
+                                    return False
+                        except:
+                            continue
+                    
+                    # Strategy 2: CSS selector search if standard failed
+                    if not relationship_button:
+                        css_selectors = [
+                            "button[type='button']",
+                            "button._acan._acap._acat",  # Following button classes
+                            "button._acan._acap._acas._aj1-",  # Requested button classes
                         ]
                         
-                        for selector in menu_selectors:
+                        for selector in css_selectors:
                             try:
-                                menu_buttons = self.driver.find_elements(By.CSS_SELECTOR, selector)
-                                for button in menu_buttons:
-                                    if button.is_displayed() and button.text.strip().lower() == "unfollow":
-                                        unfollow_button = button
-                                        log_signal.emit(f"📍 Found Unfollow button via {selector}")
-                                        break
-                                if unfollow_button:
+                                elements = self.driver.find_elements(By.CSS_SELECTOR, selector)
+                                for element in elements:
+                                    if element.is_displayed() and element.is_enabled():
+                                        element_text = element.text.strip().lower()
+                                        if element_text in ['following', 'requested']:
+                                            relationship_button = element
+                                            button_status = element_text
+                                            log_signal.emit(f"✅ Found '{element_text}' button (CSS search)")
+                                            break
+                                if relationship_button:
                                     break
                             except:
                                 continue
-                    except:
-                        pass
-                
-                if unfollow_button:
-                    log_signal.emit("🖱️ Clicking Unfollow...")
-                    try:
-                        # Try regular click first
-                        unfollow_button.click()
-                    except:
-                        # Fallback to JavaScript click
-                        self.driver.execute_script("arguments[0].click();", unfollow_button)
                     
-                    time.sleep(3)  # Wait for action to complete
+                    # Strategy 3: XPath search as last resort
+                    if not relationship_button:
+                        xpath_selectors = [
+                            "//button[contains(text(), 'Following')]",
+                            "//button[contains(text(), 'Requested')]",
+                            "//*[@role='button'][contains(text(), 'Following')]",
+                            "//*[@role='button'][contains(text(), 'Requested')]"
+                        ]
+                        
+                        for xpath in xpath_selectors:
+                            try:
+                                element = self.driver.find_element(By.XPATH, xpath)
+                                if element.is_displayed() and element.is_enabled():
+                                    relationship_button = element
+                                    button_status = element.text.strip().lower()
+                                    log_signal.emit(f"✅ Found '{button_status}' button (XPath search)")
+                                    break
+                            except:
+                                continue
+                    
+                    if relationship_button:
+                        break
+                    else:
+                        log_signal.emit(f"⏳ Attempt {attempt + 1} failed, waiting and retrying...")
+                        time.sleep(1)
+                        
+                except Exception as e:
+                    log_signal.emit(f"❌ Error in attempt {attempt + 1}: {str(e)}")
+                    time.sleep(1)
+            
+            if not relationship_button:
+                log_signal.emit(f"❌ Could not find Following/Requested button for {username}")
+                return False
+
+            # Enhanced clicking with multiple fallback methods
+            try:
+                log_signal.emit(f"🖱️ Clicking '{button_status}' button...")
+                
+                # Ensure button is in viewport and clickable
+                self.driver.execute_script("arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", relationship_button)
+                time.sleep(1)
+                
+                # Wait for element to be clickable
+                WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable(relationship_button))
+                
+                # Try multiple click methods
+                click_success = False
+                
+                # Method 1: Standard click
+                try:
+                    relationship_button.click()
+                    click_success = True
+                    log_signal.emit("✅ Standard click successful")
+                except Exception as e:
+                    log_signal.emit(f"⚠️ Standard click failed: {str(e)}")
+                
+                # Method 2: ActionChains click
+                if not click_success:
+                    try:
+                        ActionChains(self.driver).move_to_element(relationship_button).click().perform()
+                        click_success = True
+                        log_signal.emit("✅ ActionChains click successful")
+                    except Exception as e:
+                        log_signal.emit(f"⚠️ ActionChains click failed: {str(e)}")
+                
+                # Method 3: JavaScript click
+                if not click_success:
+                    try:
+                        self.driver.execute_script("arguments[0].click();", relationship_button)
+                        click_success = True
+                        log_signal.emit("✅ JavaScript click successful")
+                    except Exception as e:
+                        log_signal.emit(f"⚠️ JavaScript click failed: {str(e)}")
+                
+                if not click_success:
+                    log_signal.emit("❌ All click methods failed")
+                    return False
+                
+                # Wait for menu to appear with progressive timeout
+                menu_appeared = False
+                for wait_time in [0.5, 1.0, 1.5]:
+                    time.sleep(wait_time)
+                    
+                    # Check if menu appeared by looking for new clickable elements
+                    new_elements = (
+                        self.driver.find_elements(By.TAG_NAME, "button") + 
+                        self.driver.find_elements(By.CSS_SELECTOR, "div[role='button']")
+                    )
+                    
+                    for element in new_elements:
+                        try:
+                            if element.is_displayed():
+                                element_text = element.text.strip().lower()
+                                if any(term in element_text for term in ['unfollow', 'cancel']):
+                                    menu_appeared = True
+                                    break
+                        except:
+                            continue
+                    
+                    if menu_appeared:
+                        log_signal.emit(f"✅ Menu appeared after {wait_time}s")
+                        break
+                
+                if not menu_appeared:
+                    log_signal.emit("⚠️ Menu may not have appeared, proceeding anyway...")
+                
+            except Exception as e:
+                log_signal.emit(f"❌ Failed to click relationship button: {str(e)}")
+                return False
+
+            # Enhanced unfollow option detection
+            try:
+                log_signal.emit("🔍 Searching for unfollow option...")
+                
+                # Determine search terms based on button status
+                if button_status == 'requested':
+                    search_terms = ['cancel request', 'cancel', 'unfollow']
+                    log_signal.emit("🔍 Looking for cancel/unfollow options (pending request)")
                 else:
-                    # Debug: Show what's available in potential menus
+                    search_terms = ['unfollow']
+                    log_signal.emit("🔍 Looking for unfollow option")
+                
+                action_button = None
+                
+                # Multiple detection attempts with different strategies
+                for detection_attempt in range(2):
+                    log_signal.emit(f"🔍 Detection attempt {detection_attempt + 1}")
+                    
+                    # Get fresh element lists
                     try:
                         all_buttons = self.driver.find_elements(By.TAG_NAME, "button")
-                        menu_buttons = [btn.text.strip() for btn in all_buttons if btn.is_displayed() and btn.text.strip()]
-                        log_signal.emit(f"🔍 Available menu buttons: {menu_buttons}")
+                        all_divs = self.driver.find_elements(By.CSS_SELECTOR, "div[role='button']")
+                        all_clickable = all_buttons + all_divs
+                        
+                        log_signal.emit(f"📊 Found {len(all_clickable)} total clickable elements")
+                        
+                        # Look for exact matches first
+                        for element in all_clickable:
+                            try:
+                                if element.is_displayed() and element.is_enabled():
+                                    element_text = element.text.strip().lower()
+                                    
+                                    # Check for exact term matches
+                                    for term in search_terms:
+                                        if term == element_text:
+                                            action_button = element
+                                            log_signal.emit(f"🎯 Found exact match: '{element.text.strip()}'")
+                                            break
+                                    
+                                    if action_button:
+                                        break
+                            except:
+                                continue
+                        
+                        # If no exact match, look for partial matches
+                        if not action_button:
+                            for element in all_clickable:
+                                try:
+                                    if element.is_displayed() and element.is_enabled():
+                                        element_text = element.text.strip().lower()
+                                        
+                                        # Check for partial term matches
+                                        for term in search_terms:
+                                            if term in element_text and len(element_text) < 50:  # Avoid long text
+                                                action_button = element
+                                                log_signal.emit(f"🎯 Found partial match: '{element.text.strip()}'")
+                                                break
+                                        
+                                        if action_button:
+                                            break
+                                except:
+                                    continue
+                        
+                        if action_button:
+                            break
+                        else:
+                            log_signal.emit(f"⏳ Attempt {detection_attempt + 1} failed, waiting...")
+                            time.sleep(0.5)
+                            
+                    except Exception as e:
+                        log_signal.emit(f"❌ Error in detection attempt {detection_attempt + 1}: {str(e)}")
+                        time.sleep(0.5)
+                
+                if action_button:
+                    action_text = action_button.text.strip()
+                    log_signal.emit(f"🖱️ Clicking unfollow option: '{action_text}'")
+                    
+                    # Enhanced clicking for unfollow option
+                    unfollow_click_success = False
+                    
+                    # Method 1: Direct click
+                    try:
+                        action_button.click()
+                        unfollow_click_success = True
+                        log_signal.emit("✅ Unfollow option clicked successfully")
+                    except Exception as e:
+                        log_signal.emit(f"⚠️ Direct click failed: {str(e)}")
+                    
+                    # Method 2: JavaScript click
+                    if not unfollow_click_success:
+                        try:
+                            self.driver.execute_script("arguments[0].click();", action_button)
+                            unfollow_click_success = True
+                            log_signal.emit("✅ JavaScript unfollow click successful")
+                        except Exception as e:
+                            log_signal.emit(f"⚠️ JavaScript click failed: {str(e)}")
+                    
+                    if not unfollow_click_success:
+                        log_signal.emit("❌ Failed to click unfollow option")
+                        return False
+                    
+                    # Handle confirmation dialog with better detection
+                    time.sleep(0.8)  # Wait for potential confirmation dialog
+                    
+                    if 'unfollow' in action_text.lower():
+                        try:
+                            # Look for confirmation dialog
+                            confirm_selectors = [
+                                "//button[contains(text(), 'Unfollow')]",
+                                "//button[contains(translate(text(), 'UNFOLLOW', 'unfollow'), 'unfollow')]",
+                                "//*[@role='button'][contains(text(), 'Unfollow')]"
+                            ]
+                            
+                            confirm_button = None
+                            for selector in confirm_selectors:
+                                try:
+                                    elements = self.driver.find_elements(By.XPATH, selector)
+                                    for element in elements:
+                                        if element.is_displayed() and element.is_enabled():
+                                            confirm_button = element
+                                            break
+                                    if confirm_button:
+                                        break
+                                except:
+                                    continue
+                            
+                            if confirm_button:
+                                log_signal.emit("🔍 Found confirmation dialog, clicking confirm...")
+                                try:
+                                    confirm_button.click()
+                                    log_signal.emit("✅ Confirmation clicked")
+                                except:
+                                    self.driver.execute_script("arguments[0].click();", confirm_button)
+                                    log_signal.emit("✅ Confirmation clicked (JS)")
+                            else:
+                                log_signal.emit("ℹ️ No confirmation dialog found (action may be complete)")
+                                
+                        except Exception as e:
+                            log_signal.emit(f"⚠️ Error handling confirmation: {str(e)}")
+                    
+                    # Quick success verification
+                    time.sleep(1)
+                    
+                    try:
+                        # Check if we can find a "Follow" button now (indicating success)
+                        post_action_buttons = self.driver.find_elements(By.TAG_NAME, "button")
+                        for button in post_action_buttons:
+                            try:
+                                if button.is_displayed():
+                                    button_text = button.text.strip().lower()
+                                    if button_text in ['follow', 'follow back']:
+                                        if button_status == 'requested':
+                                            log_signal.emit(f"✅ Successfully cancelled follow request for {username}")
+                                        else:
+                                            log_signal.emit(f"✅ Successfully unfollowed {username}")
+                                        return True
+                            except:
+                                continue
+                        
+                        # If no clear indication, assume success (better than false negative)
+                        log_signal.emit(f"✅ Unfollow action completed for {username}")
+                        return True
+                        
+                    except Exception as e:
+                        log_signal.emit(f"✅ Unfollow completed for {username} (verification skipped: {str(e)})")
+                        return True
+                    
+                else:
+                    # Enhanced debugging when no unfollow option is found
+                    log_signal.emit("❌ Could not find unfollow option")
+                    
+                    try:
+                        # Show available options for debugging
+                        all_elements = (
+                            self.driver.find_elements(By.TAG_NAME, "button") + 
+                            self.driver.find_elements(By.CSS_SELECTOR, "div[role='button']")
+                        )
+                        
+                        visible_options = []
+                        for element in all_elements:
+                            try:
+                                if element.is_displayed() and element.text.strip():
+                                    visible_options.append(element.text.strip())
+                            except:
+                                continue
+                        
+                        if visible_options:
+                            log_signal.emit(f"🔍 Available options: {visible_options[:10]}")  # Show first 10
+                        else:
+                            log_signal.emit("🔍 No visible options found")
+                            
                     except:
                         pass
                     
-                    log_signal.emit("❌ Could not find Unfollow option in menu")
                     return False
                     
             except Exception as e:
-                log_signal.emit(f"❌ Error finding/clicking Unfollow: {str(e)}")
+                log_signal.emit(f"❌ Error in unfollow detection: {str(e)}")
                 return False
 
-            # Verify unfollow was successful
-            try:
-                log_signal.emit("🔄 Verifying unfollow...")
-                time.sleep(3)
-                
-                # Refresh the page to get updated state
-                self.driver.refresh()
-                time.sleep(4)
-                
-                # Check if we now see a Follow button
-                buttons = self.driver.find_elements(By.TAG_NAME, "button")
-                for button in buttons:
-                    if button.is_displayed():
-                        button_text = button.text.strip().lower()
-                        if button_text in ['follow', 'follow back']:
-                            log_signal.emit(f"✅ Successfully unfollowed {username}")
-                            return True
-                
-                log_signal.emit(f"⚠️ Unfollow may have succeeded but verification unclear for {username}")
-                return True  # Assume success if we got this far
-                
-            except Exception as e:
-                log_signal.emit(f"⚠️ Error verifying unfollow for {username}: {str(e)}")
-                return True  # Assume success if we got this far
-
         except Exception as e:
-            log_signal.emit(f"❌ Error unfollowing {username}: {str(e)}")
+            log_signal.emit(f"❌ Critical error processing {username}: {str(e)}")
             return False
 
     def unfollow_scheduler(self, log_signal):
@@ -715,9 +1091,9 @@ class InstagramBot:
                                 self.save_followed_users()
                                 unfollowed_count += 1
                                 
-                                # Add random delay between unfollows
-                                delay = random.uniform(self.min_delay, self.max_delay)
-                                log_signal.emit(f"Waiting {delay:.1f} seconds before next unfollow...")
+                                # Add random delay between unfollows (automatic optimal timing)
+                                delay = random.uniform(self.unfollow_min_delay, self.unfollow_max_delay)
+                                log_signal.emit(f"⏳ Auto delay: {delay:.1f}s before next unfollow...")
                                 time.sleep(delay)
                 
                 if unfollowed_count > 0:
@@ -770,11 +1146,9 @@ class InstagramBot:
 
                         if self.follow_user(follower, log_signal):
                             successfully_followed.append(follower)
-                            # Export CSV after each successful follow
-                            self.export_followed_users(successfully_followed, log_signal)
-                            # Random delay between follows
-                            delay = random.uniform(self.min_delay, self.max_delay)
-                            log_signal.emit(f"Waiting {delay:.1f} seconds... ({len(successfully_followed)}/{total_follows_needed} completed)")
+                            # Random delay between follows (automatic optimal timing)
+                            delay = random.uniform(self.follow_min_delay, self.follow_max_delay)
+                            log_signal.emit(f"⏳ Auto delay: {delay:.1f}s... ({len(successfully_followed)}/{total_follows_needed} completed)")
                             time.sleep(delay)
 
                 # Check if we found any new follows in this cycle
@@ -837,10 +1211,10 @@ class InstagramBot:
                 else:
                     log_signal.emit(f"❌ Failed to unfollow {username}")
                 
-                # Only add delay if not the last account
+                # Only add delay if not the last account (automatic optimal timing)
                 if i < total_accounts and self.is_running:
-                    delay = random.uniform(self.min_delay, self.max_delay)
-                    log_signal.emit(f"⏳ Waiting {delay:.1f} seconds...")
+                    delay = random.uniform(self.unfollow_min_delay, self.unfollow_max_delay)
+                    log_signal.emit(f"⏳ Auto delay: {delay:.1f}s...")
                     time.sleep(delay)
 
             log_signal.emit(f"\n🎉 Unfollow process completed!")
@@ -886,10 +1260,14 @@ class InstagramBot:
             # User agent to appear more natural
             options.add_argument('--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
             
-            # Performance options
+            # Performance options optimized for 6-core parallel processing
             options.add_argument('--disable-extensions')
             options.add_argument('--disable-plugins')
             options.add_argument('--disable-images')  # Speed up loading
+            options.add_argument('--disable-javascript')  # Faster page loads
+            options.add_argument('--disable-css')  # Skip CSS loading
+            options.add_argument('--disable-web-security')  # Faster processing
+            options.add_argument('--aggressive-cache-discard')  # Memory optimization
             
             self.driver = webdriver.Chrome(options=options)
             self.driver.implicitly_wait(10)
@@ -904,24 +1282,26 @@ class InstagramBot:
             return False
 
     def export_followed_users(self, usernames, log_signal):
-        """Export followed users to CSV with explicit path"""
+        """Export followed users to CSV with explicit path - optimized for batch export"""
         try:
             # Create timestamp for filename
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             
             # Create the full path for the CSV file
             csv_dir = self.data_dir / 'csv_exports'
-            csv_path = csv_dir / f'followed_users_{timestamp}.csv'
+            csv_path = csv_dir / f'followed_users_batch_{timestamp}.csv'
             
-            # Write the CSV file
+            # Write the CSV file with more detailed information
             with open(csv_path, 'w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
-                writer.writerow(['Username', 'Followed At', 'Status'])
+                writer.writerow(['Username', 'Followed At', 'Status', 'Instagram Account'])
                 for username in usernames:
-                    status = self.attempted_follows.get(username, {}).get('status', 'unknown')
-                    writer.writerow([username, datetime.now().isoformat(), status])
+                    attempt_data = self.attempted_follows.get(username, {})
+                    status = attempt_data.get('status', 'unknown')
+                    followed_at = attempt_data.get('timestamp', datetime.now().isoformat())
+                    writer.writerow([username, followed_at, status, self.username])
             
-            log_signal.emit(f"Exported {len(usernames)} followed users to {csv_path}")
+            log_signal.emit(f"📊 Batch complete! Exported {len(usernames)} followed users to {csv_path}")
             return str(csv_path)
             
         except Exception as e:

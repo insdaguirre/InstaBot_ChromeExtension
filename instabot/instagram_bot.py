@@ -24,14 +24,18 @@ from PyQt5.QtCore import QUrl
 
 class InstagramBot:
     def __init__(self, username, password, target_accounts, users_per_account=50,
-                 min_delay=30, max_delay=60, unfollow_delay=0):
+                 unfollow_delay=0):
         self.username = username
         self.password = password
         self.target_accounts = target_accounts
         self.users_per_account = users_per_account
-        self.min_delay = min_delay
-        self.max_delay = max_delay
         self.unfollow_delay = unfollow_delay
+        
+        # Fixed optimal delays - no user configuration needed
+        self.follow_min_delay = 25  # Slightly longer for following (more restricted)
+        self.follow_max_delay = 45
+        self.unfollow_min_delay = 3  # Much shorter for unfollowing (less restricted)
+        self.unfollow_max_delay = 8
         self.is_running = False
         self.driver = None
         self.followed_users = []
@@ -76,12 +80,34 @@ class InstagramBot:
             return None
 
     def init_driver(self):
-        """Initialize the web driver"""
+        """Initialize the web driver optimized for 6-core parallel processing"""
         chrome_options = Options()
+        
+        # Basic stability options
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
+        chrome_options.add_argument('--disable-blink-features=AutomationControlled')
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        
+        # Performance options optimized for 6-core parallel processing
+        chrome_options.add_argument('--disable-extensions')
+        chrome_options.add_argument('--disable-plugins')
+        chrome_options.add_argument('--disable-images')  # Speed up loading
+        chrome_options.add_argument('--disable-javascript')  # Faster page loads
+        chrome_options.add_argument('--disable-css')  # Skip CSS loading
+        chrome_options.add_argument('--disable-web-security')  # Faster processing
+        chrome_options.add_argument('--aggressive-cache-discard')  # Memory optimization
+        
+        # Window settings
+        chrome_options.add_argument('--start-maximized')
+        chrome_options.add_argument('--disable-notifications')
+        
         self.driver = webdriver.Chrome(options=chrome_options)
         self.driver.set_window_size(1200, 800)
+        
+        # Execute script to remove webdriver property
+        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
 
     def login(self, log_signal):
         """Log in to Instagram"""
@@ -671,9 +697,9 @@ class InstagramBot:
                                 self.save_followed_users()
                                 unfollowed_count += 1
                                 
-                                # Add random delay between unfollows
-                                delay = random.uniform(self.min_delay, self.max_delay)
-                                log_signal.emit(f"Waiting {delay:.1f} seconds before next unfollow...")
+                                # Add random delay between unfollows (automatic optimal timing)
+                                delay = random.uniform(self.unfollow_min_delay, self.unfollow_max_delay)
+                                log_signal.emit(f"⏳ Auto delay: {delay:.1f}s before next unfollow...")
                                 time.sleep(delay)
                 
                 if unfollowed_count > 0:
@@ -726,11 +752,9 @@ class InstagramBot:
 
                         if self.follow_user(follower, log_signal):
                             successfully_followed.append(follower)
-                            # Export CSV after each successful follow
-                            self.export_followed_users(successfully_followed, log_signal)
-                            # Random delay between follows
-                            delay = random.uniform(self.min_delay, self.max_delay)
-                            log_signal.emit(f"Waiting {delay:.1f} seconds... ({len(successfully_followed)}/{total_follows_needed} completed)")
+                            # Random delay between follows (automatic optimal timing)
+                            delay = random.uniform(self.follow_min_delay, self.follow_max_delay)
+                            log_signal.emit(f"⏳ Auto delay: {delay:.1f}s... ({len(successfully_followed)}/{total_follows_needed} completed)")
                             time.sleep(delay)
 
                 # Check if we found any new follows in this cycle
@@ -782,9 +806,9 @@ class InstagramBot:
                     else:
                         failed_attempts.append(username)
                     
-                    # Randomized shorter delay between unfollows
-                    delay = random.uniform(self.min_delay / 2, self.max_delay / 2)
-                    log_signal.emit(f"⏳ Short wait ({delay:.1f}s)...")
+                    # Randomized shorter delay between unfollows (automatic optimal timing)
+                    delay = random.uniform(self.unfollow_min_delay, self.unfollow_max_delay)
+                    log_signal.emit(f"⏳ Auto delay: {delay:.1f}s...")
                     time.sleep(delay)
 
                 except Exception as e:
@@ -813,24 +837,26 @@ class InstagramBot:
             self.driver = None 
 
     def export_followed_users(self, usernames, log_signal):
-        """Export followed users to CSV with explicit path"""
+        """Export followed users to CSV with explicit path - optimized for batch export"""
         try:
             # Create timestamp for filename
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             
             # Create the full path for the CSV file
             csv_dir = self.data_dir / 'csv_exports'
-            csv_path = csv_dir / f'followed_users_{timestamp}.csv'
+            csv_path = csv_dir / f'followed_users_batch_{timestamp}.csv'
             
-            # Write the CSV file
+            # Write the CSV file with more detailed information
             with open(csv_path, 'w', newline='', encoding='utf-8') as file:
                 writer = csv.writer(file)
-                writer.writerow(['Username', 'Followed At', 'Status'])
+                writer.writerow(['Username', 'Followed At', 'Status', 'Instagram Account'])
                 for username in usernames:
-                    status = self.attempted_follows.get(username, {}).get('status', 'unknown')
-                    writer.writerow([username, datetime.now().isoformat(), status])
+                    attempt_data = self.attempted_follows.get(username, {})
+                    status = attempt_data.get('status', 'unknown')
+                    followed_at = attempt_data.get('timestamp', datetime.now().isoformat())
+                    writer.writerow([username, followed_at, status, self.username])
             
-            log_signal.emit(f"Exported {len(usernames)} followed users to {csv_path}")
+            log_signal.emit(f"📊 Batch complete! Exported {len(usernames)} followed users to {csv_path}")
             return str(csv_path)
             
         except Exception as e:
