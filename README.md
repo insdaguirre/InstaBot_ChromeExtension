@@ -2,7 +2,7 @@
 
 ## 📸 Dashboard Overview
 ![Instagram Bot Dashboard](pic.png)
-*Real-time web dashboard showing active monitoring, service controls, and comprehensive analytics*
+*Web dashboard showing active monitoring, service controls, and comprehensive analytics*
 
 ---
 
