@@ -1,0 +1,6 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+anytime there is a command, specify if it needs to be run in my ssh or locally. 

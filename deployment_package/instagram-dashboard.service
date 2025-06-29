@@ -1,0 +1,20 @@
+[Unit]
+Description=Instagram Bot Web Dashboard
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=bot
+Group=bot
+WorkingDirectory=/home/bot/instagram-automation
+Environment=PATH=/home/bot/instagram-automation/venv/bin
+ExecStart=/home/bot/instagram-automation/venv/bin/python web_dashboard.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=instagram-dashboard
+
+[Install]
+WantedBy=multi-user.target
