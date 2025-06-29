@@ -1,7 +1,7 @@
 # 🤖 Autonomous Instagram Growth Engine
 
 ## 📸 Dashboard Overview
-![Instagram Bot Dashboard]('Screenshot 2025-06-29 at 12.09.03 AM.png')
+![Instagram Bot Dashboard]('pic.png')
 *Real-time web dashboard showing active monitoring, service controls, and comprehensive analytics*
 
 ---
