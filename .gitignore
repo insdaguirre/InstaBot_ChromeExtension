@@ -4,21 +4,49 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
+env/
+venv/
+ENV/
 *.egg-info/
-.installed.cfg
-*.egg
+
+# Instagram Data (keep private)
+instagram_data/
+bot_data/
+gui_settings.json
+
+# Logs
+logs/
+*.log
+
+# Chrome/Selenium
+*.crx
+chromedriver*
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+*.tmp
+*.temp
+
+# Screenshots (may contain sensitive info)
+screenshots/
+*.png
+*.jpg
+*.jpeg
+!pic.png
 
 # Virtual Environment
 venv/
@@ -32,11 +60,9 @@ env/
 *.swo
 
 # Project specific
-instagram_data/
 followed_users.json
 followed_users.backup.json
 *.log
-chromedriver*
 
 # Sensitive configuration files
 config.json
@@ -47,6 +73,5 @@ settings.json
 *.key
 
 # macOS
-.DS_Store
 .AppleDouble
 .LSOverride 

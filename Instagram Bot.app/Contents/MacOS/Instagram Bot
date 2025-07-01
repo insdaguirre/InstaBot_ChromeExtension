@@ -1,0 +1,47 @@
+#!/bin/bash
+
+# Get the directory containing this script
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+APP_ROOT="$( cd "$DIR/../.." && pwd )"
+
+# Ensure we're using the system Python
+PYTHON="/usr/bin/python3"
+
+# Create a simple launcher script
+LAUNCHER="$APP_ROOT/launcher.py"
+cat > "$LAUNCHER" << 'EOL'
+#!/usr/bin/env python3
+import os
+import sys
+import subprocess
+
+def launch_gui():
+    try:
+        # Get the app bundle path
+        app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        
+        # Change to the app directory
+        os.chdir(app_dir)
+        
+        # Launch the GUI directly
+        subprocess.run(["/usr/bin/python3", "instagram_gui.py"], check=True)
+        
+    except Exception as e:
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror("Error", f"Failed to start Instagram Bot:\n\n{str(e)}")
+        root.destroy()
+        sys.exit(1)
+
+if __name__ == "__main__":
+    launch_gui()
+EOL
+
+# Make the launcher executable
+chmod +x "$LAUNCHER"
+
+# Launch the GUI
+exec "$PYTHON" "$LAUNCHER"
+ 
