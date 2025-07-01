@@ -1,5 +1,7 @@
 # 📸 Insta Bot - Vintage GUI Edition
 
+![Insta Bot GUI](gui.png)
+
 A local, privacy-first Instagram automation tool with a retro Windows-style interface. This bot allows you to safely grow and manage your Instagram account by following and unfollowing users in batches, with full anti-detection logic and batch tracking.
 
 ---
