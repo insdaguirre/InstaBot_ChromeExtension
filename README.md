@@ -17,7 +17,7 @@ A local, privacy-first Instagram automation tool with a retro Windows-style inte
 
 ## 🛠️ How It Works
 
-1. **You launch the GUI** (`~/instabot`)
+1. **You launch the GUI in terminal** (`~/instabot`)
 2. **Enter your Instagram credentials and targets**
 3. **Start a batch:**
    - The bot logs in using Selenium automation
