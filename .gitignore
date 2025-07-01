@@ -43,7 +43,6 @@ Thumbs.db
 
 # Screenshots (may contain sensitive info)
 screenshots/
-*.png
 *.jpg
 *.jpeg
 !pic.png
