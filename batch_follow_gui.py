@@ -8,24 +8,26 @@ import random
 import uuid
 from deployment_package.instagram_gui import InstagramBotGUI
 
+VINTAGE_BLUE = "#0a246a"
+VINTAGE_GRAY = "#c0c0c0"
+VINTAGE_LIGHT = "#eaeaea"
+VINTAGE_BORDER = "#808080"
+VINTAGE_BTN = "#f0f0f0"
+VINTAGE_FONT = ("Courier New", 10, "normal")
+VINTAGE_FONT_BOLD = ("Courier New", 11, "bold")
+VINTAGE_HEADER = ("Courier New", 20, "bold")
+VINTAGE_BTN_FONT = ("Courier New", 10, "bold")
+
 class BatchFollowGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Instagram Batch Follow Manager")
-        
-        # Set window size and make it resizable
-        self.root.geometry("900x700")
-        self.root.minsize(900, 700)
-        
-        # Configure style
-        self.style = ttk.Style()
-        self.style.configure('Header.TLabel', font=('Helvetica', 16, 'bold'))
-        self.style.configure('Batch.TFrame', relief='solid', borderwidth=1)
-        self.style.configure('BatchHeader.TLabel', font=('Helvetica', 11, 'bold'))
-        self.style.configure('Status.TLabel', font=('Helvetica', 10))
-        self.style.configure('Unfollowed.TFrame', background='#f0f0f0')
-        
-        # Variables
+        self.root.title("insta bot")
+        self.root.configure(bg=VINTAGE_GRAY)
+        self.root.geometry("1100x750")
+        self.root.minsize(900, 650)
+        self.status_message = tk.StringVar(value="Ready to start")
+        self.total_followed = tk.StringVar(value="0")
+        self.total_unfollowed = tk.StringVar(value="0")
         self.username_var = tk.StringVar()
         self.password_var = tk.StringVar()
         self.target_accounts_var = tk.StringVar()
@@ -33,149 +35,103 @@ class BatchFollowGUI:
         self.max_follows_var = tk.StringVar(value="10")
         self.show_browser_var = tk.BooleanVar(value=True)
         self.show_password_var = tk.BooleanVar(value=False)
-        
-        # Add status message variable
-        self.status_message = tk.StringVar(value="Ready to start")
-        
-        # Add counters
-        self.total_followed = tk.StringVar(value="0")
-        self.total_unfollowed = tk.StringVar(value="0")
-        
-        # Data storage
         self.data_dir = Path('instagram_data')
         self.data_dir.mkdir(exist_ok=True)
         self.batches_file = self.data_dir / 'follow_batches.json'
         self.batches = self.load_batches()
-        
-        # Create main layout
         self.create_main_layout()
-        
-        # Start periodic updates
         self.update_batches_display()
         self.update_totals()
-        
+
     def create_main_layout(self):
-        # Main container with padding
-        main_container = ttk.Frame(self.root, padding="20")
-        main_container.pack(fill=tk.BOTH, expand=True)
-        
-        # Left panel - Configuration
-        left_panel = ttk.Frame(main_container, width=300)
-        left_panel.pack(side=tk.LEFT, fill=tk.Y, padx=(0, 20))
-        left_panel.pack_propagate(False)
-        
-        # Login section
-        login_frame = ttk.LabelFrame(left_panel, text="Instagram Login", padding="10")
-        login_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Label(login_frame, text="Username:").pack(fill=tk.X)
-        ttk.Entry(login_frame, textvariable=self.username_var).pack(fill=tk.X, pady=(0, 5))
-        
-        ttk.Label(login_frame, text="Password:").pack(fill=tk.X)
-        
-        # Password entry and show password checkbox in same frame
-        password_frame = ttk.Frame(login_frame)
-        password_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        self.password_entry = ttk.Entry(password_frame, textvariable=self.password_var, show="*")
-        self.password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        ttk.Checkbutton(
-            password_frame, 
-            text="Show", 
-            variable=self.show_password_var,
-            command=self.toggle_password_visibility
-        ).pack(side=tk.LEFT, padx=(5, 0))
-        
-        # Target accounts section
-        target_frame = ttk.LabelFrame(left_panel, text="Target Configuration", padding="10")
-        target_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Label(target_frame, text="Target Accounts (comma-separated):").pack(fill=tk.X)
-        ttk.Entry(target_frame, textvariable=self.target_accounts_var).pack(fill=tk.X, pady=(0, 5))
-        
-        ttk.Label(target_frame, text="Follow Range:").pack(fill=tk.X)
-        range_frame = ttk.Frame(target_frame)
-        range_frame.pack(fill=tk.X)
-        
-        ttk.Entry(range_frame, textvariable=self.min_follows_var, width=5).pack(side=tk.LEFT)
-        ttk.Label(range_frame, text=" to ").pack(side=tk.LEFT)
-        ttk.Entry(range_frame, textvariable=self.max_follows_var, width=5).pack(side=tk.LEFT)
-        
-        # Options
-        options_frame = ttk.Frame(target_frame)
-        options_frame.pack(fill=tk.X, pady=(5, 0))
-        ttk.Checkbutton(options_frame, text="Show Browser", variable=self.show_browser_var).pack(side=tk.LEFT)
-        
-        # Action buttons
-        actions_frame = ttk.Frame(left_panel)
-        actions_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Button(actions_frame, text="Start New Batch", command=self.start_new_batch).pack(fill=tk.X, pady=(0, 5))
-        ttk.Button(actions_frame, text="Delete Unfollowed Batches", command=self.delete_unfollowed_batches).pack(fill=tk.X, pady=(0, 5))
-        
+        # --- Title Bar ---
+        title_bar = tk.Frame(self.root, bg=VINTAGE_BLUE, height=56)
+        title_bar.pack(fill=tk.X, side=tk.TOP)
+        title_bar.pack_propagate(False)
+        title_label = tk.Label(title_bar, text="insta bot", fg="white", bg=VINTAGE_BLUE, font=VINTAGE_HEADER, padx=16, pady=8, anchor="w")
+        title_label.pack(side=tk.LEFT, fill=tk.Y)
+        for color in ("#c0c0c0", "#c0c0c0", "#c0c0c0"):
+            tk.Canvas(title_bar, width=16, height=24, bg=VINTAGE_BLUE, highlightthickness=0).pack(side=tk.RIGHT, padx=2)
+
+        # --- Main Layout ---
+        main = tk.Frame(self.root, bg=VINTAGE_GRAY)
+        main.pack(fill=tk.BOTH, expand=True)
+
+        # Left column (status/summary on top, controls below)
+        left_col = tk.Frame(main, bg=VINTAGE_GRAY)
+        left_col.pack(side=tk.LEFT, fill=tk.Y, padx=(18, 8), pady=18, expand=False)
+
+        # --- Status/Summary (top of left column) ---
+        status_summary = tk.Frame(left_col, bg=VINTAGE_GRAY)
+        status_summary.pack(fill=tk.X, pady=(0, 10))
         # Status log
-        status_frame = ttk.LabelFrame(left_panel, text="Status Log", padding="10")
-        status_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        ttk.Label(status_frame, textvariable=self.status_message, wraplength=250).pack(fill=tk.X)
-        
-        # Totals frame
-        totals_frame = ttk.LabelFrame(left_panel, text="Total Statistics", padding="10")
-        totals_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        # Total followed
-        followed_frame = ttk.Frame(totals_frame)
-        followed_frame.pack(fill=tk.X, pady=(0, 5))
-        ttk.Label(followed_frame, text="Total Followed:").pack(side=tk.LEFT)
-        ttk.Label(followed_frame, textvariable=self.total_followed, font=('Helvetica', 10, 'bold')).pack(side=tk.RIGHT)
-        
-        # Total unfollowed
-        unfollowed_frame = ttk.Frame(totals_frame)
-        unfollowed_frame.pack(fill=tk.X)
-        ttk.Label(unfollowed_frame, text="Total Unfollowed:").pack(side=tk.LEFT)
-        ttk.Label(unfollowed_frame, textvariable=self.total_unfollowed, font=('Helvetica', 10, 'bold')).pack(side=tk.RIGHT)
-        
-        # Right panel - Batches
-        right_panel = ttk.Frame(main_container)
-        right_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        
-        # Batches header with custom style
-        header_label = ttk.Label(right_panel, text="Follow Batches", style='Header.TLabel')
-        header_label.pack(fill=tk.X, pady=(0, 10))
-        
-        # Create scrollable frame for batches
-        self.canvas = tk.Canvas(right_panel, highlightthickness=0)
-        scrollbar = ttk.Scrollbar(right_panel, orient="vertical", command=self.canvas.yview)
-        
-        # Create a frame to hold all batches
-        self.scrollable_frame = ttk.Frame(self.canvas)
-        
-        # Configure scrolling
+        status_frame = tk.LabelFrame(status_summary, text="STATUS LOG", font=VINTAGE_FONT_BOLD, bg=VINTAGE_LIGHT, fg="black", bd=2, relief="groove", labelanchor="nw")
+        status_frame.pack(fill=tk.X, pady=(0, 6))
+        tk.Label(status_frame, textvariable=self.status_message, wraplength=320, bg=VINTAGE_LIGHT, font=VINTAGE_FONT, anchor="w", justify="left").pack(fill=tk.BOTH, padx=8, pady=8)
+        # Stats
+        stats_frame = tk.LabelFrame(status_summary, text="SUMMARY", font=VINTAGE_FONT_BOLD, bg=VINTAGE_LIGHT, fg="black", bd=2, relief="groove", labelanchor="nw")
+        stats_frame.pack(fill=tk.X)
+        tk.Label(stats_frame, text="TOTAL FOLLOWED:", bg=VINTAGE_LIGHT, font=VINTAGE_FONT_BOLD, anchor="w").pack(fill=tk.X, padx=8, pady=(8,0))
+        tk.Label(stats_frame, textvariable=self.total_followed, font=VINTAGE_FONT_BOLD, bg=VINTAGE_LIGHT, anchor="w").pack(fill=tk.X, padx=8)
+        tk.Label(stats_frame, text="TOTAL UNFOLLOWED:", bg=VINTAGE_LIGHT, font=VINTAGE_FONT_BOLD, anchor="w").pack(fill=tk.X, padx=8, pady=(8,0))
+        tk.Label(stats_frame, textvariable=self.total_unfollowed, font=VINTAGE_FONT_BOLD, bg=VINTAGE_LIGHT, anchor="w").pack(fill=tk.X, padx=8)
+
+        # --- Controls (bottom of left column) ---
+        controls = tk.Frame(left_col, bg=VINTAGE_GRAY, bd=2, relief="groove", highlightbackground=VINTAGE_BORDER, highlightthickness=2)
+        controls.pack(fill=tk.BOTH, expand=True, pady=(10, 0))
+        tk.Label(controls, text="CONTROLS", font=VINTAGE_FONT_BOLD, bg=VINTAGE_GRAY, anchor="w").pack(fill=tk.X, pady=(10, 2), padx=12)
+        # Login
+        login_frame = tk.LabelFrame(controls, text="INSTAGRAM LOGIN", font=VINTAGE_FONT, bg=VINTAGE_LIGHT, fg="black", bd=2, relief="groove", labelanchor="nw")
+        login_frame.pack(fill=tk.X, padx=12, pady=(0, 10))
+        tk.Label(login_frame, text="Username:", bg=VINTAGE_LIGHT, font=VINTAGE_FONT).pack(anchor="w", padx=8, pady=(6,0))
+        tk.Entry(login_frame, textvariable=self.username_var, font=VINTAGE_FONT, bg="white", relief="sunken", bd=2).pack(fill=tk.X, padx=8, pady=(0, 6))
+        tk.Label(login_frame, text="Password:", bg=VINTAGE_LIGHT, font=VINTAGE_FONT).pack(anchor="w", padx=8)
+        pw_frame = tk.Frame(login_frame, bg=VINTAGE_LIGHT)
+        pw_frame.pack(fill=tk.X, padx=8, pady=(0, 6))
+        self.password_entry = tk.Entry(pw_frame, textvariable=self.password_var, show="*", font=VINTAGE_FONT, bg="white", relief="sunken", bd=2)
+        self.password_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        tk.Checkbutton(pw_frame, text="Show", variable=self.show_password_var, command=self.toggle_password_visibility, bg=VINTAGE_LIGHT, font=VINTAGE_FONT).pack(side=tk.LEFT, padx=(8,0))
+        # Target
+        target_frame = tk.LabelFrame(controls, text="TARGET CONFIGURATION", font=VINTAGE_FONT, bg=VINTAGE_LIGHT, fg="black", bd=2, relief="groove", labelanchor="nw")
+        target_frame.pack(fill=tk.X, padx=12, pady=(0, 10))
+        tk.Label(target_frame, text="Target Accounts (comma-separated):", bg=VINTAGE_LIGHT, font=VINTAGE_FONT).pack(anchor="w", padx=8, pady=(6,0))
+        tk.Entry(target_frame, textvariable=self.target_accounts_var, font=VINTAGE_FONT, bg="white", relief="sunken", bd=2).pack(fill=tk.X, padx=8, pady=(0, 6))
+        tk.Label(target_frame, text="Follow Range:", bg=VINTAGE_LIGHT, font=VINTAGE_FONT).pack(anchor="w", padx=8)
+        range_frame = tk.Frame(target_frame, bg=VINTAGE_LIGHT)
+        range_frame.pack(fill=tk.X, padx=8, pady=(0, 6))
+        tk.Entry(range_frame, textvariable=self.min_follows_var, width=5, font=VINTAGE_FONT, bg="white", relief="sunken", bd=2).pack(side=tk.LEFT)
+        tk.Label(range_frame, text=" to ", bg=VINTAGE_LIGHT, font=VINTAGE_FONT).pack(side=tk.LEFT)
+        tk.Entry(range_frame, textvariable=self.max_follows_var, width=5, font=VINTAGE_FONT, bg="white", relief="sunken", bd=2).pack(side=tk.LEFT)
+        tk.Checkbutton(target_frame, text="Show Browser", variable=self.show_browser_var, bg=VINTAGE_LIGHT, font=VINTAGE_FONT).pack(anchor="w", padx=8, pady=(0, 6))
+        # Buttons
+        btn_frame = tk.Frame(controls, bg=VINTAGE_GRAY)
+        btn_frame.pack(fill=tk.X, padx=12, pady=(0, 10))
+        tk.Button(btn_frame, text="START NEW BATCH", command=self.start_new_batch, font=VINTAGE_BTN_FONT, bg=VINTAGE_BTN, relief="raised", bd=2, activebackground=VINTAGE_LIGHT, anchor="center").pack(fill=tk.X, pady=(0, 6))
+        tk.Button(btn_frame, text="DELETE UNFOLLOWED BATCHES", command=self.delete_unfollowed_batches, font=VINTAGE_BTN_FONT, bg=VINTAGE_BTN, relief="raised", bd=2, activebackground=VINTAGE_LIGHT, anchor="center").pack(fill=tk.X)
+
+        # --- Batches/Logs (right column) ---
+        batches_panel = tk.Frame(main, bg=VINTAGE_GRAY, bd=2, relief="groove", highlightbackground=VINTAGE_BORDER, highlightthickness=2)
+        batches_panel.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(8, 18), pady=18)
+        tk.Label(batches_panel, text="FOLLOW BATCHES", font=VINTAGE_FONT_BOLD, bg=VINTAGE_GRAY, anchor="w").pack(fill=tk.X, padx=12, pady=(10, 0))
+        self.canvas = tk.Canvas(batches_panel, highlightthickness=0, bg=VINTAGE_LIGHT)
+        scrollbar = ttk.Scrollbar(batches_panel, orient="vertical", command=self.canvas.yview)
+        self.scrollable_frame = tk.Frame(self.canvas, bg=VINTAGE_LIGHT)
         self.scrollable_frame.bind(
             "<Configure>",
             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         )
-        
-        # Create window in canvas
         self.canvas_window = self.canvas.create_window(
             (0, 0),
             window=self.scrollable_frame,
             anchor="nw",
-            width=right_panel.winfo_width()
+            width=700
         )
-        
-        # Pack canvas and scrollbar
-        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        # Configure canvas
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(12,0), pady=(0,12))
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y, pady=(0,12))
         self.canvas.configure(yscrollcommand=scrollbar.set)
-        
-        # Bind events
         self.canvas.bind('<Configure>', self._on_canvas_configure)
         self.root.bind_all("<MouseWheel>", self._on_mousewheel)
-        
+
     def _on_canvas_configure(self, event):
         # Update the width of the canvas window when the canvas is resized
         self.canvas.itemconfig(self.canvas_window, width=event.width)
