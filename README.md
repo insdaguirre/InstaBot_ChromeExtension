@@ -73,7 +73,7 @@ graph LR;
 ## 🖥️ How to Use
 
 1. **Launch the app:**
-   ```bash
+```bash
    ~/instabot
    ```
 2. **Enter your Instagram login, target accounts, and follow range**

@@ -31,8 +31,7 @@ class BatchFollowGUI:
         self.username_var = tk.StringVar()
         self.password_var = tk.StringVar()
         self.target_accounts_var = tk.StringVar()
-        self.min_follows_var = tk.StringVar(value="3")
-        self.max_follows_var = tk.StringVar(value="10")
+        self.follows_per_account_var = tk.StringVar(value="10")
         self.show_browser_var = tk.BooleanVar(value=True)
         self.show_password_var = tk.BooleanVar(value=False)
         self.data_dir = Path('instagram_data')
@@ -96,12 +95,10 @@ class BatchFollowGUI:
         target_frame.pack(fill=tk.X, padx=12, pady=(0, 10))
         tk.Label(target_frame, text="Target Accounts (comma-separated):", bg=VINTAGE_LIGHT, font=VINTAGE_FONT, fg="black").pack(anchor="w", padx=8, pady=(6,0))
         tk.Entry(target_frame, textvariable=self.target_accounts_var, font=VINTAGE_FONT, bg="white", relief="sunken", bd=2, fg="black").pack(fill=tk.X, padx=8, pady=(0, 6))
-        tk.Label(target_frame, text="Follow Range:", bg=VINTAGE_LIGHT, font=VINTAGE_FONT, fg="black").pack(anchor="w", padx=8)
+        tk.Label(target_frame, text="Follows per Account:", bg=VINTAGE_LIGHT, font=VINTAGE_FONT, fg="black").pack(anchor="w", padx=8)
         range_frame = tk.Frame(target_frame, bg=VINTAGE_LIGHT)
         range_frame.pack(fill=tk.X, padx=8, pady=(0, 6))
-        tk.Entry(range_frame, textvariable=self.min_follows_var, width=5, font=VINTAGE_FONT, bg="white", relief="sunken", bd=2, fg="black").pack(side=tk.LEFT)
-        tk.Label(range_frame, text=" to ", bg=VINTAGE_LIGHT, font=VINTAGE_FONT, fg="black").pack(side=tk.LEFT)
-        tk.Entry(range_frame, textvariable=self.max_follows_var, width=5, font=VINTAGE_FONT, bg="white", relief="sunken", bd=2, fg="black").pack(side=tk.LEFT)
+        tk.Entry(range_frame, textvariable=self.follows_per_account_var, width=5, font=VINTAGE_FONT, bg="white", relief="sunken", bd=2, fg="black").pack(side=tk.LEFT)
         tk.Checkbutton(target_frame, text="Show Browser", variable=self.show_browser_var, bg=VINTAGE_LIGHT, font=VINTAGE_FONT, fg="black").pack(anchor="w", padx=8, pady=(0, 6))
         # Buttons
         btn_frame = tk.Frame(controls, bg=VINTAGE_GRAY)
@@ -303,11 +300,6 @@ class BatchFollowGUI:
             
         self.update_status("Starting new batch...")
             
-        # Get follow count
-        min_follows = int(self.min_follows_var.get())
-        max_follows = int(self.max_follows_var.get())
-        follow_count = random.randint(min_follows, max_follows)
-        
         # Create new batch
         batch = {
             'id': str(uuid.uuid4()),
@@ -324,28 +316,27 @@ class BatchFollowGUI:
         # Start following process in background
         threading.Thread(
             target=self.execute_batch,
-            args=(batch, follow_count),
+            args=(batch,),
             daemon=True
         ).start()
         
-    def execute_batch(self, batch, follow_count):
+    def execute_batch(self, batch):
         try:
             self.update_status(f"Initializing bot for new batch...")
             
-            # For each account, follow a random number in the range
-            for account in batch['source_accounts']:
-                per_account_count = random.randint(
-                    int(self.min_follows_var.get()),
-                    int(self.max_follows_var.get())
-                )
-                self.update_status(f"Following up to {per_account_count} users from @{account}...")
+            # Get follows per account
+            follows_per_account = int(self.follows_per_account_var.get())
+            
+            # For each account, follow the specified number
+            for i, account in enumerate(batch['source_accounts']):
+                self.update_status(f"Following {follows_per_account} users from @{account}...")
                 
                 # Create a fresh bot instance for each account (to avoid session issues)
                 bot = InstagramBotGUI(
                     self.username_var.get().strip(),
                     self.password_var.get().strip(),
                     [account],
-                    per_account_count
+                    follows_per_account
                 )
                 
                 if not bot.init_driver(show_browser=self.show_browser_var.get()):
@@ -353,8 +344,12 @@ class BatchFollowGUI:
                 if not bot.login():
                     raise Exception("Failed to login to Instagram")
                 
+                # Store initial count for this account
+                initial_count = len(batch['users'])
+                
                 followed = bot.follow_users_from_account(account)
-                # Update batch with new follows
+                
+                # Update batch with new follows from this account
                 for username, data in bot.follows_data.items():
                     if data.get('source_account') == account and not any(u['username'] == username for u in batch['users']):
                         batch['users'].append({
@@ -362,11 +357,22 @@ class BatchFollowGUI:
                             'followed_at': data['followed_at'],
                             'unfollowed': False
                         })
+                        
+                # Update GUI after completing each account
+                self.save_batches()
+                self.root.after(0, self.update_batches_display)
+                self.root.after(0, self.update_totals)
+                
+                account_follows = len(batch['users']) - initial_count
+                self.update_status(f"Completed @{account}: {account_follows} users followed")
+                        
                 if bot.driver:
                     bot.driver.quit()
-            
+                
             batch['completed'] = True
             self.save_batches()
+            self.root.after(0, self.update_batches_display)
+            self.root.after(0, self.update_totals)
             self.update_status(f"Batch completed: {len(batch['users'])} users followed")
         except Exception as e:
             error_msg = f"Failed to execute batch: {str(e)}"
@@ -436,14 +442,13 @@ class BatchFollowGUI:
             return False
             
         try:
-            min_follows = int(self.min_follows_var.get())
-            max_follows = int(self.max_follows_var.get())
+            follows_per_account = int(self.follows_per_account_var.get())
             
-            if min_follows < 1 or max_follows < min_follows:
+            if follows_per_account < 1:
                 raise ValueError()
                 
         except ValueError:
-            messagebox.showerror("Error", "Please enter valid follow range numbers")
+            messagebox.showerror("Error", "Please enter a valid number for follows per account")
             return False
             
         return True
