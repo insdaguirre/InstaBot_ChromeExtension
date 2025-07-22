@@ -297,6 +297,7 @@ class InstagramBotGUI:
                 return 0
             
             follow_count = 0
+            new_usernames = []
             scroll_attempts = 0
             max_scrolls = 50
             last_position = -1
@@ -347,6 +348,11 @@ class InstagramBotGUI:
                                     if not username or username in self.follows_data:
                                         continue
                                     
+                                    # Double-check follow count right before clicking
+                                    if follow_count >= self.users_per_account:
+                                        self.logger.info(f"✅ Reached target follow count before clicking: {follow_count}")
+                                        break
+                                    
                                     # Enforce delay BEFORE clicking
                                     delay = random.randint(self.follow_delay_min, self.follow_delay_max)
                                     self.logger.info(f"⏳ Waiting {delay} seconds before next follow...")
@@ -381,8 +387,14 @@ class InstagramBotGUI:
                                             self.log_action('follow', username, f'From {account}')
                                             follow_count += 1
                                             processed_buttons.add(button_pos)
+                                            new_usernames.append(username)
                                             
                                             self.logger.info(f"✅ Followed @{username} ({follow_count}/{self.users_per_account})")
+                                            
+                                            # Check if we've reached target after this follow
+                                            if follow_count >= self.users_per_account:
+                                                self.logger.info(f"🎯 Target reached: {follow_count} users followed")
+                                                break
                                     except:
                                         self.logger.debug(f"Could not verify follow for {username}")
                                         
@@ -393,6 +405,11 @@ class InstagramBotGUI:
                             except Exception as e:
                                 self.logger.debug(f"❌ Error with follow button: {str(e)}")
                                 continue
+                        
+                        # Check if target reached after processing all buttons in this iteration
+                        if follow_count >= self.users_per_account:
+                            self.logger.info(f"🎯 Exiting loop - target reached: {follow_count}")
+                            break
                     
                     # Update no_new_buttons_count
                     if not new_buttons_found:
@@ -455,11 +472,11 @@ class InstagramBotGUI:
             
             self.save_follows_data()
             self.logger.info(f"🎉 Completed following from {account}: {follow_count} users followed")
-            return follow_count
+            return new_usernames
             
         except Exception as e:
             self.logger.error(f"❌ Error following users from {account}: {str(e)}")
-            return 0
+            return []
 
     def unfollow_user(self, username):
         """Unfollow a specific user"""
@@ -921,11 +938,11 @@ class InstagramAutomationGUI:
                 
                 try:
                     follows = self.bot.follow_users_from_account(account)
-                    total_follows += follows
+                    total_follows += len(follows)
                     
-                    if follows > 0:
+                    if len(follows) > 0:
                         successful_accounts += 1
-                        self.root.after(0, lambda f=follows, a=account: 
+                        self.root.after(0, lambda f=len(follows), a=account: 
                             self.add_status_message(f"✅ Followed {f} users from @{a}"))
                     else:
                         self.root.after(0, lambda a=account: 

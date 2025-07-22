@@ -38,9 +38,11 @@ class BatchFollowGUI:
         self.data_dir.mkdir(exist_ok=True)
         self.batches_file = self.data_dir / 'follow_batches.json'
         self.batches = self.load_batches()
+        self.auto_refresh_running = False
         self.create_main_layout()
         self.update_batches_display()
         self.update_totals()
+        self.start_auto_refresh()
 
     def create_main_layout(self):
         # --- Title Bar ---
@@ -244,9 +246,6 @@ class BatchFollowGUI:
         # Create frames for each batch
         for batch in sorted_batches:
             self.create_batch_frame(batch, self.scrollable_frame)
-            
-        # Schedule next update
-        self.root.after(5000, self.update_batches_display)
         
     def update_status(self, message):
         """Update the status message"""
@@ -264,8 +263,19 @@ class BatchFollowGUI:
         self.total_followed.set(str(total_followed))
         self.total_unfollowed.set(str(total_unfollowed))
         
-        # Schedule next update
-        self.root.after(5000, self.update_totals)
+    def start_auto_refresh(self):
+        """Start the auto-refresh timer if not already running"""
+        if not self.auto_refresh_running:
+            self.auto_refresh_running = True
+            self._auto_refresh()
+    
+    def _auto_refresh(self):
+        """Internal method for auto-refreshing display"""
+        if self.auto_refresh_running:
+            self.update_batches_display()
+            self.update_totals()
+            # Schedule next refresh
+            self.root.after(5000, self._auto_refresh)
         
     def delete_unfollowed_batches(self):
         """Delete all batches that have been completely unfollowed"""
@@ -339,6 +349,10 @@ class BatchFollowGUI:
                     follows_per_account
                 )
                 
+                # Clear any existing follows data to ensure fresh start for this account
+                bot.follows_data = {}
+                self.update_status(f"Starting bot for @{account} (target: {follows_per_account} users)")
+                
                 if not bot.init_driver(show_browser=self.show_browser_var.get()):
                     raise Exception("Failed to initialize browser")
                 if not bot.login():
@@ -347,19 +361,30 @@ class BatchFollowGUI:
                 # Store initial count for this account
                 initial_count = len(batch['users'])
                 
-                followed = bot.follow_users_from_account(account)
+                followed_usernames = bot.follow_users_from_account(account)
+                self.update_status(f"Bot completed @{account}: {len(followed_usernames)} users followed, {len(bot.follows_data)} in follows_data")
                 
-                # Update batch with new follows from this account
-                for username, data in bot.follows_data.items():
-                    if data.get('source_account') == account and not any(u['username'] == username for u in batch['users']):
+                # Update batch with only the users actually followed in this run
+                users_added = 0
+                for username in followed_usernames:
+                    if not any(u['username'] == username for u in batch['users']):
+                        data = bot.follows_data.get(username, {})
                         batch['users'].append({
                             'username': username,
-                            'followed_at': data['followed_at'],
-                            'unfollowed': False
+                            'followed_at': data.get('followed_at', datetime.now().isoformat()),
+                            'unfollowed': False,
+                            'source_account': account
                         })
-                        
-                # Update GUI after completing each account
+                        users_added += 1
+                        self.update_status(f"Added @{username} to batch from @{account}")
+                
+                # Force immediate save and display update
                 self.save_batches()
+                self.update_status(f"Batch updated: {users_added} users added from @{account}, {len(batch['users'])} total users")
+                        
+                # Update GUI after completing each account with immediate refresh
+                self.save_batches()
+                # Force immediate GUI update from main thread
                 self.root.after(0, self.update_batches_display)
                 self.root.after(0, self.update_totals)
                 
@@ -371,6 +396,7 @@ class BatchFollowGUI:
                 
             batch['completed'] = True
             self.save_batches()
+            # Force immediate final update from main thread
             self.root.after(0, self.update_batches_display)
             self.root.after(0, self.update_totals)
             self.update_status(f"Batch completed: {len(batch['users'])} users followed")
