@@ -23,7 +23,19 @@ The extension features a **vintage Windows-style popup interface** with:
 - **Unfollow Users:** Input field for number (1-50) + "START UNFOLLOWING" button  
 - **Status Log:** Real-time updates with timestamps and progress indicators
 
+### Interface Screenshots:
+
+#### ✅ **Follow Configuration**
+![Follow Configuration](follow-config.png)
+*Chrome extension popup showing the follow interface with page detection and follow controls*
+
+#### ✅ **Unfollow Configuration**  
+![Unfollow Configuration](unfollow-config.png)
+*Chrome extension popup showing the unfollow interface with page detection and unfollow controls*
+
 ### Interface States:
+
+*Note: See the screenshots above for actual interface appearance. The ASCII art below shows the basic layout structure.*
 
 #### ✅ **Ready State (Followers Page)**
 ```
