@@ -26,11 +26,11 @@ The extension features a **vintage Windows-style popup interface** with:
 ### Interface Screenshots:
 
 #### ✅ **Follow Configuration**
-![Follow Configuration](follow-config.png)
+![Follow Configuration](./follow-config.png)
 *Chrome extension popup showing the follow interface with page detection and follow controls*
 
 #### ✅ **Unfollow Configuration**  
-![Unfollow Configuration](unfollow-config.png)
+![Unfollow Configuration](./unfollow-config.png)
 *Chrome extension popup showing the unfollow interface with page detection and unfollow controls*
 
 ### Interface States:
