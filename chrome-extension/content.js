@@ -64,7 +64,11 @@ function checkCurrentPage() {
         };
     }
     
-    // SIMPLE URL-BASED DETECTION (most reliable)
+    // ENHANCED URL-BASED DETECTION
+    console.log('🔍 Checking URL patterns...');
+    console.log('URL includes /followers/:', url.includes('/followers/'));
+    console.log('URL includes /following/:', url.includes('/following/'));
+    
     if (url.includes('/followers/')) {
         const username = extractUsernameFromUrl(url);
         console.log('✅ DETECTED: Followers page for @', username);
@@ -83,7 +87,36 @@ function checkCurrentPage() {
         };
     }
     
+    // FALLBACK: Check for modal dialog and its content
+    console.log('🔍 Checking for modal dialog...');
+    const modal = document.querySelector('div[role="dialog"]');
+    if (modal) {
+        console.log('✅ Found modal dialog');
+        const modalText = modal.textContent.toLowerCase();
+        console.log('Modal text contains "followers":', modalText.includes('followers'));
+        console.log('Modal text contains "following":', modalText.includes('following'));
+        
+        if (modalText.includes('followers')) {
+            const username = extractUsernameFromPage();
+            console.log('✅ DETECTED: Followers page via modal for @', username);
+            return {
+                pageType: 'followers',
+                pageInfo: `Followers of @${username}`
+            };
+        }
+        
+        if (modalText.includes('following')) {
+            const username = extractUsernameFromPage();
+            console.log('✅ DETECTED: Following page via modal for @', username);
+            return {
+                pageType: 'following',
+                pageInfo: `Following of @${username}`
+            };
+        }
+    }
+    
     // FALLBACK: Check for follow buttons (if URL doesn't work)
+    console.log('🔍 Checking for follow buttons...');
     const followButtons = findFollowButtons();
     const followingButtons = findFollowingButtons();
     
@@ -108,8 +141,32 @@ function checkCurrentPage() {
         };
     }
     
+    // FINAL FALLBACK: Check page title
+    console.log('🔍 Checking page title...');
+    const pageTitle = document.title.toLowerCase();
+    console.log('Page title:', pageTitle);
+    
+    if (pageTitle.includes('followers')) {
+        const username = extractUsernameFromPage();
+        console.log('✅ DETECTED: Followers page via title for @', username);
+        return {
+            pageType: 'followers',
+            pageInfo: `Followers of @${username}`
+        };
+    }
+    
+    if (pageTitle.includes('following')) {
+        const username = extractUsernameFromPage();
+        console.log('✅ DETECTED: Following page via title for @', username);
+        return {
+            pageType: 'following',
+            pageInfo: `Following of @${username}`
+        };
+    }
+    
     console.log('❌ Could not detect page type');
     console.log('URL was:', url);
+    console.log('Page title was:', document.title);
     return {
         pageType: 'other',
         pageInfo: 'Not on followers/following page'
@@ -602,3 +659,58 @@ function testUrlDetection() {
 
 // Make test function available globally
 window.testUrlDetection = testUrlDetection; 
+
+// Test function for comprehensive page detection debugging
+function testPageDetection() {
+    console.log('🧪 === COMPREHENSIVE PAGE DETECTION TEST ===');
+    
+    const url = window.location.href;
+    console.log('1. URL Analysis:');
+    console.log('   URL:', url);
+    console.log('   Includes instagram.com:', url.includes('instagram.com'));
+    console.log('   Includes /followers/:', url.includes('/followers/'));
+    console.log('   Includes /following/:', url.includes('/following/'));
+    
+    console.log('\n2. Page Title Analysis:');
+    console.log('   Title:', document.title);
+    console.log('   Title includes "followers":', document.title.toLowerCase().includes('followers'));
+    console.log('   Title includes "following":', document.title.toLowerCase().includes('following'));
+    
+    console.log('\n3. Modal Dialog Analysis:');
+    const modal = document.querySelector('div[role="dialog"]');
+    console.log('   Modal found:', !!modal);
+    if (modal) {
+        console.log('   Modal text (first 200 chars):', modal.textContent.substring(0, 200));
+        console.log('   Modal contains "followers":', modal.textContent.toLowerCase().includes('followers'));
+        console.log('   Modal contains "following":', modal.textContent.toLowerCase().includes('following'));
+    }
+    
+    console.log('\n4. Button Analysis:');
+    const followButtons = findFollowButtons();
+    const followingButtons = findFollowingButtons();
+    console.log('   Follow buttons found:', followButtons.length);
+    console.log('   Following buttons found:', followingButtons.length);
+    
+    if (followButtons.length > 0) {
+        console.log('   First follow button text:', followButtons[0].textContent);
+    }
+    if (followingButtons.length > 0) {
+        console.log('   First following button text:', followingButtons[0].textContent);
+    }
+    
+    console.log('\n5. Username Extraction:');
+    const urlUsername = extractUsernameFromUrl(url);
+    const pageUsername = extractUsernameFromPage();
+    console.log('   Username from URL:', urlUsername);
+    console.log('   Username from page:', pageUsername);
+    
+    console.log('\n6. Final Page Detection Result:');
+    const result = checkCurrentPage();
+    console.log('   Result:', result);
+    
+    console.log('🧪 === END TEST ===');
+    return result;
+}
+
+// Make test function available globally
+window.testPageDetection = testPageDetection; 
