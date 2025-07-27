@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Instagram Automation Helper",
+  "version": "1.0",
+  "description": "Follow and unfollow Instagram users with ease",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://www.instagram.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Instagram Automation"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html"],
+      "matches": ["https://www.instagram.com/*"]
+    }
+  ]
+} 
