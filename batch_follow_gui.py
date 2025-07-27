@@ -362,6 +362,8 @@ class BatchFollowGUI:
                 initial_count = len(batch['users'])
                 
                 followed_usernames = bot.follow_users_from_account(account)
+                if not isinstance(followed_usernames, list):
+                    followed_usernames = []
                 self.update_status(f"Bot completed @{account}: {len(followed_usernames)} users followed, {len(bot.follows_data)} in follows_data")
                 
                 # Update batch with only the users actually followed in this run

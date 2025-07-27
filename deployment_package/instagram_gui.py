@@ -235,247 +235,94 @@ class InstagramBotGUI:
     def follow_users_from_account(self, account):
         try:
             self.logger.info(f"🎯 Navigating to account: {account}")
-            
-            # Navigate to the target account
             self.driver.get(f"https://www.instagram.com/{account}/")
-            time.sleep(5)  # Longer wait for page load
-            
+
             # Check if account exists and is accessible
             page_source = self.driver.page_source.lower()
             if "sorry, this page isn't available" in page_source or "user not found" in page_source:
                 self.logger.error(f"❌ Account {account} not found or not accessible")
-                return 0
-            
+                return []
             if "this account is private" in page_source:
                 self.logger.error(f"❌ Account {account} is private")
-                return 0
-            
-            self.logger.info(f"✅ Successfully loaded {account} profile")
-            
-            # Find and click followers link with multiple fallback strategies
-            followers_link = None
+                return []
+
+            # Open followers modal
             try:
-                # Strategy 1: Look for followers link by href
-                self.logger.info("🔍 Looking for followers link...")
                 followers_link = WebDriverWait(self.driver, 10).until(
-                    EC.element_to_be_clickable((By.XPATH, "//a[contains(@href, '/followers/')]"))
+                    EC.element_to_be_clickable((By.XPATH, "//a[contains(@href, '/followers/') or contains(text(), 'followers') or contains(@title, 'followers')]"))
                 )
-            except TimeoutException:
-                try:
-                    # Strategy 2: Look for followers text
-                    followers_link = WebDriverWait(self.driver, 5).until(
-                        EC.element_to_be_clickable((By.XPATH, "//a[contains(text(), 'followers') or contains(text(), 'Followers')]"))
-                    )
-                except TimeoutException:
-                    try:
-                        # Strategy 3: Look for followers count element
-                        followers_link = WebDriverWait(self.driver, 5).until(
-                            EC.element_to_be_clickable((By.XPATH, "//a[contains(@title, 'followers')]"))
-                        )
-                    except TimeoutException:
-                        self.logger.error(f"❌ Could not find followers link for {account}")
-                        return 0
-            
-            if not followers_link:
-                self.logger.error(f"❌ No followers link found for {account}")
-                return 0
-            
-            # Click followers link
-            self.logger.info("👥 Clicking followers link...")
-            self.driver.execute_script("arguments[0].click();", followers_link)
-            time.sleep(5)
-            
-            # Wait for followers modal to load
+                self.driver.execute_script("arguments[0].click();", followers_link)
+            except Exception as e:
+                self.logger.error(f"❌ Could not open followers modal: {e}")
+                return []
+
+            # Wait for modal
             try:
                 modal = WebDriverWait(self.driver, 10).until(
                     EC.presence_of_element_located((By.XPATH, "//div[@role='dialog']"))
                 )
-                self.logger.info("✅ Followers modal loaded")
-                time.sleep(3)
-            except TimeoutException:
-                self.logger.error("❌ Followers modal failed to load")
-                return 0
-            
-            follow_count = 0
-            new_usernames = []
+            except Exception as e:
+                self.logger.error(f"❌ Followers modal failed to load: {e}")
+                return []
+
+            followed_count = 0
+            followed_usernames = []
+            processed_usernames = set()
+            max_scrolls = 100
             scroll_attempts = 0
-            max_scrolls = 50
-            last_position = -1
-            same_position_count = 0
-            processed_buttons = set()
-            no_new_buttons_count = 0
-            
-            self.logger.info(f"🎯 Starting to follow users (target: {self.users_per_account})")
-            
-            while follow_count < self.users_per_account and scroll_attempts < max_scrolls:
-                # Double-check follow count before proceeding
-                if follow_count >= self.users_per_account:
-                    self.logger.info(f"✅ Reached target follow count: {follow_count}")
-                    break
-                
-                try:
-                    # Find all follow buttons
-                    follow_buttons = WebDriverWait(self.driver, 5).until(
-                        EC.presence_of_all_elements_located((By.XPATH, "//button[.//div[text()='Follow']]"))
-                    )
-                    
-                    new_buttons_found = False
-                    if follow_buttons:
-                        self.logger.info(f"📋 Found {len(follow_buttons)} follow buttons")
-                        
-                        # Process each button
-                        for button in follow_buttons:
-                            # Check follow count before each button
-                            if follow_count >= self.users_per_account:
-                                self.logger.info(f"✅ Reached target follow count: {follow_count}")
-                                break
-                                
+
+            while followed_count < self.users_per_account and scroll_attempts < max_scrolls:
+                # Find all visible follow buttons and their usernames
+                follow_buttons = self.driver.find_elements(By.XPATH, "//button[.//div[text()='Follow']]")
+                if not follow_buttons:
+                    break  # No more follow buttons, stop
+                found_new = False
+                for button in follow_buttons:
+                    try:
+                        parent = button.find_element(By.XPATH, "./ancestor::div[contains(@style, 'display: flex') or contains(@class, 'x1dm5mii')]")
+                        username_link = parent.find_element(By.XPATH, ".//a[contains(@href, '/') and not(contains(@href, '/followers/')) and not(contains(@href, '/following/'))]")
+                        username = username_link.get_attribute('href').split('/')[-2]
+                        if not username or username in processed_usernames or username in self.follows_data:
+                            continue
+                        # Wait 1 second before each follow click
+                        time.sleep(1)
+                        # Click follow
+                        self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", button)
+                        try:
+                            button.click()
+                        except Exception:
                             try:
-                                # Get button's position to uniquely identify it
-                                button_pos = button.location['y']
-                                if button_pos in processed_buttons:
-                                    continue
-                                
-                                new_buttons_found = True
-                                
-                                # Get username before clicking
-                                try:
-                                    parent = button.find_element(By.XPATH, "./ancestor::div[contains(@style, 'display: flex') or contains(@class, 'x1dm5mii')]")
-                                    username_link = parent.find_element(By.XPATH, ".//a[contains(@href, '/') and not(contains(@href, '/followers/')) and not(contains(@href, '/following/'))]")
-                                    username_href = username_link.get_attribute('href')
-                                    username = username_href.split('/')[-2] if username_href else None
-                                    
-                                    if not username or username in self.follows_data:
-                                        continue
-                                    
-                                    # Double-check follow count right before clicking
-                                    if follow_count >= self.users_per_account:
-                                        self.logger.info(f"✅ Reached target follow count before clicking: {follow_count}")
-                                        break
-                                    
-                                    # Enforce delay BEFORE clicking
-                                    delay = random.randint(self.follow_delay_min, self.follow_delay_max)
-                                    self.logger.info(f"⏳ Waiting {delay} seconds before next follow...")
-                                    time.sleep(delay)
-                                        
-                                    # Scroll button into view and click
-                                    self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", button)
-                                    time.sleep(1)
-                                    
-                                    # Try to click the button
-                                    try:
-                                        button.click()
-                                    except:
-                                        try:
-                                            self.driver.execute_script("arguments[0].click();", button)
-                                        except:
-                                            actions = webdriver.ActionChains(self.driver)
-                                            actions.move_to_element(button).click().perform()
-                                    
-                                    # Verify the follow was successful
-                                    time.sleep(1)
-                                    try:
-                                        # Check if button text changed to "Following" or "Requested"
-                                        button_text = button.text.lower()
-                                        if "following" in button_text or "requested" in button_text:
-                                            # Record successful follow
-                                            self.follows_data[username] = {
-                                                'status': 'following',
-                                                'followed_at': datetime.now().isoformat(),
-                                                'source_account': account
-                                            }
-                                            self.log_action('follow', username, f'From {account}')
-                                            follow_count += 1
-                                            processed_buttons.add(button_pos)
-                                            new_usernames.append(username)
-                                            
-                                            self.logger.info(f"✅ Followed @{username} ({follow_count}/{self.users_per_account})")
-                                            
-                                            # Check if we've reached target after this follow
-                                            if follow_count >= self.users_per_account:
-                                                self.logger.info(f"🎯 Target reached: {follow_count} users followed")
-                                                break
-                                    except:
-                                        self.logger.debug(f"Could not verify follow for {username}")
-                                        
-                                except Exception as e:
-                                    self.logger.debug(f"❌ Error processing button: {str(e)}")
-                                    continue
-                                    
-                            except Exception as e:
-                                self.logger.debug(f"❌ Error with follow button: {str(e)}")
-                                continue
-                        
-                        # Check if target reached after processing all buttons in this iteration
-                        if follow_count >= self.users_per_account:
-                            self.logger.info(f"🎯 Exiting loop - target reached: {follow_count}")
+                                self.driver.execute_script("arguments[0].click();", button)
+                            except Exception:
+                                actions = webdriver.ActionChains(self.driver)
+                                actions.move_to_element(button).click().perform()
+                        # Assume follow is always successful
+                        self.logger.info(f"✅ Followed @{username} ({followed_count + 1})")
+                        self.follows_data[username] = {
+                            'status': 'following',
+                            'followed_at': datetime.now().isoformat(),
+                            'source_account': account
+                        }
+                        self.log_action('follow', username, f'From {account}')
+                        followed_usernames.append(username)
+                        followed_count += 1
+                        processed_usernames.add(username)
+                        found_new = True
+                        if followed_count >= self.users_per_account:
                             break
-                    
-                    # Update no_new_buttons_count
-                    if not new_buttons_found:
-                        no_new_buttons_count += 1
-                        self.logger.info(f"No new buttons found (attempt {no_new_buttons_count})")
-                    else:
-                        no_new_buttons_count = 0
-                    
-                    # If we haven't found new buttons in several attempts, try a larger scroll
-                    if no_new_buttons_count >= 3:
-                        self.logger.info("No new buttons found, attempting larger scroll...")
-                        modal = self.driver.find_element(By.XPATH, "//div[@role='dialog']")
-                        self.driver.execute_script(
-                            "arguments[0].scrollTop = arguments[0].scrollTop + (arguments[0].offsetHeight * 2);", 
-                            modal
-                        )
-                        time.sleep(3)
-                        no_new_buttons_count = 0
+                    except Exception:
                         continue
-                    
-                    # Normal scroll
-                    modal = self.driver.find_element(By.XPATH, "//div[@role='dialog']")
-                    current_position = self.driver.execute_script("return arguments[0].scrollTop;", modal)
-                    
-                    # Check if we're stuck at the same position
-                    if current_position == last_position:
-                        same_position_count += 1
-                        if same_position_count >= 5:
-                            # Try one final large scroll before giving up
-                            self.driver.execute_script(
-                                "arguments[0].scrollTop = arguments[0].scrollTop + (arguments[0].offsetHeight * 3);", 
-                                modal
-                            )
-                            time.sleep(3)
-                            new_position = self.driver.execute_script("return arguments[0].scrollTop;", modal)
-                            if new_position == current_position:
-                                self.logger.info("Reached end of modal or can't scroll further")
-                                break
-                            else:
-                                same_position_count = 0
-                    else:
-                        same_position_count = 0
-                    
-                    # Regular scroll
-                    self.driver.execute_script(
-                        "arguments[0].scrollTop = arguments[0].scrollTop + arguments[0].offsetHeight;", 
-                        modal
-                    )
-                    
-                    last_position = current_position
-                    scroll_attempts += 1
-                    
-                    # Wait for new content to load
-                    time.sleep(2)
-                    
-                except Exception as e:
-                    self.logger.error(f"❌ Error during follow process: {str(e)}")
-                    scroll_attempts += 1
-                    time.sleep(2)
-            
+                if followed_count >= self.users_per_account:
+                    break
+                # Always scroll after each pass, then re-query for buttons
+                modal_element = self.driver.find_element(By.XPATH, "//div[@role='dialog']")
+                self.driver.execute_script("arguments[0].scrollTop = arguments[0].scrollTop + arguments[0].offsetHeight;", modal_element)
+                scroll_attempts += 1
             self.save_follows_data()
-            self.logger.info(f"🎉 Completed following from {account}: {follow_count} users followed")
-            return new_usernames
-            
+            self.logger.info(f"🎉 Completed following from @{account}: {followed_count} users followed.")
+            return followed_usernames
         except Exception as e:
-            self.logger.error(f"❌ Error following users from {account}: {str(e)}")
+            self.logger.error(f"❌ Failed to follow users from {account}: {str(e)}")
             return []
 
     def unfollow_user(self, username):
