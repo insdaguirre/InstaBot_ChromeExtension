@@ -1,6 +1,22 @@
 // content.js - Runs on Instagram pages and performs automation
 
 let isRunning = false;
+let followedUsernames = []; // Store usernames of accounts we've followed
+
+// Load followed usernames from storage
+chrome.storage.local.get(['followedUsernames'], function(result) {
+    if (result.followedUsernames) {
+        followedUsernames = result.followedUsernames;
+        console.log('📋 Loaded', followedUsernames.length, 'followed usernames from storage');
+    }
+});
+
+// Save followed usernames to storage
+function saveFollowedUsernames() {
+    chrome.storage.local.set({followedUsernames: followedUsernames}, function() {
+        console.log('💾 Saved', followedUsernames.length, 'followed usernames to storage');
+    });
+}
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -25,6 +41,12 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             sendResponse({message: "❌ Already running, please wait..."});
         }
         return true; // Indicates we will respond asynchronously
+    } else if (request.action === 'getFollowedCount') {
+        sendResponse({count: followedUsernames.length});
+    } else if (request.action === 'clearFollowedList') {
+        followedUsernames = [];
+        saveFollowedUsernames();
+        sendResponse({message: "🗑️ Cleared followed usernames list"});
     }
 });
 
@@ -267,6 +289,13 @@ async function startFollowing(count) {
                     if (username) {
                         updateStatus(`⏳ Following @${username} (${followed + 1}/${count})`);
                         
+                        // Add to followed list
+                        if (!followedUsernames.includes(username)) {
+                            followedUsernames.push(username);
+                            saveFollowedUsernames();
+                            console.log('📋 Added', username, 'to followed list');
+                        }
+                        
                         // Random delay before clicking
                         const delay = getRandomDelay();
                         updateStatus(`⏳ Waiting ${delay.toFixed(1)}s before following @${username}...`);
@@ -323,7 +352,8 @@ async function startUnfollowing(count) {
     isRunning = true;
     let unfollowed = 0;
     
-    updateStatus(`🎯 Looking for following buttons...`);
+    updateStatus(`🎯 Looking for users from followed list...`);
+    updateStatus(`📋 Found ${followedUsernames.length} users in followed list`);
     
     try {
         // Wait for modal to be ready
@@ -352,32 +382,46 @@ async function startUnfollowing(count) {
                     const username = getUsernameFromButton(button);
                     
                     if (username) {
-                        updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count})`);
-                        
-                        // Random delay before clicking
-                        const delay = getRandomDelay();
-                        updateStatus(`⏳ Waiting ${delay.toFixed(1)}s before unfollowing @${username}...`);
-                        await sleep(delay * 1000);
-                        
-                        // Click following button
-                        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        await sleep(500);
-                        button.click();
-                        
-                        // Wait for and click unfollow confirmation
-                        await sleep(1000);
-                        const unfollowBtn = findUnfollowButton();
-                        if (unfollowBtn) {
-                            unfollowBtn.click();
+                        // Check if username is in followed list
+                        if (followedUsernames.includes(username)) {
+                            updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count}) - from followed list`);
+                            
+                            // Random delay before clicking
+                            const delay = getRandomDelay();
+                            updateStatus(`⏳ Waiting ${delay.toFixed(1)}s before unfollowing @${username}...`);
+                            await sleep(delay * 1000);
+                            
+                            // Click following button
+                            button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            await sleep(500);
+                            button.click();
+                            
+                            // Wait for and click unfollow confirmation
+                            await sleep(1000);
+                            const unfollowBtn = findUnfollowButton();
+                            if (unfollowBtn) {
+                                unfollowBtn.click();
+                            }
+                            
+                            unfollowed++;
+                            
+                            // Remove from followed list
+                            const index = followedUsernames.indexOf(username);
+                            if (index > -1) {
+                                followedUsernames.splice(index, 1);
+                                saveFollowedUsernames();
+                                console.log('📋 Removed', username, 'from followed list');
+                            }
+                            
+                            updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${count})`);
+                            
+                            // Random delay between unfollows
+                            const nextDelay = getRandomDelay();
+                            updateStatus(`⏳ Waiting ${nextDelay.toFixed(1)}s before next unfollow...`);
+                            await sleep(nextDelay * 1000);
+                        } else {
+                            updateStatus(`⚠️ Skipping @${username} - not in followed list`);
                         }
-                        
-                        unfollowed++;
-                        updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${count})`);
-                        
-                        // Random delay between unfollows
-                        const nextDelay = getRandomDelay();
-                        updateStatus(`⏳ Waiting ${nextDelay.toFixed(1)}s before next unfollow...`);
-                        await sleep(nextDelay * 1000);
                     }
                 } catch (error) {
                     console.log('Error unfollowing user:', error);

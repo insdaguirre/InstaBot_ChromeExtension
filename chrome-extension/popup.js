@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const startUnfollowBtn = document.getElementById('startUnfollow');
     const followCountInput = document.getElementById('followCount');
     const unfollowCountInput = document.getElementById('unfollowCount');
+    const followedCountDiv = document.getElementById('followedCount');
 
     // Check current page when popup opens
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -22,7 +23,21 @@ document.addEventListener('DOMContentLoaded', function() {
                 updateUI('other', 'Could not detect page type');
             }
         });
+        
+        // Get followed count
+        chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedCount'}, function(response) {
+            if (response) {
+                updateFollowedCount(response.count);
+            }
+        });
     });
+
+    // Update followed count display
+    function updateFollowedCount(count) {
+        if (followedCountDiv) {
+            followedCountDiv.textContent = `📋 Followed: ${count} users`;
+        }
+    }
 
     // Update UI based on current page
     function updateUI(pageType, pageInfo) {
@@ -67,6 +82,12 @@ document.addEventListener('DOMContentLoaded', function() {
             }, function(response) {
                 if (response) {
                     updateStatus(response.message);
+                    // Update followed count after following
+                    chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedCount'}, function(countResponse) {
+                        if (countResponse) {
+                            updateFollowedCount(countResponse.count);
+                        }
+                    });
                 }
                 startFollowBtn.disabled = false;
             });
@@ -91,11 +112,32 @@ document.addEventListener('DOMContentLoaded', function() {
             }, function(response) {
                 if (response) {
                     updateStatus(response.message);
+                    // Update followed count after unfollowing
+                    chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedCount'}, function(countResponse) {
+                        if (countResponse) {
+                            updateFollowedCount(countResponse.count);
+                        }
+                    });
                 }
                 startUnfollowBtn.disabled = false;
             });
         });
     });
+
+    // Clear followed list button
+    const clearListBtn = document.getElementById('clearList');
+    if (clearListBtn) {
+        clearListBtn.addEventListener('click', function() {
+            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                chrome.tabs.sendMessage(tabs[0].id, {action: 'clearFollowedList'}, function(response) {
+                    if (response) {
+                        updateStatus(response.message);
+                        updateFollowedCount(0);
+                    }
+                });
+            });
+        });
+    }
 
     // Update status display
     function updateStatus(message) {
