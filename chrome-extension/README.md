@@ -2,6 +2,88 @@
 
 A Chrome extension for Instagram automation that works directly in your browser. Follow and unfollow users with precise control while using your real Instagram session.
 
+## 🎨 Interface Preview
+
+The extension features a **vintage Windows-style popup interface** with:
+- **Blue title bar** with "Instagram Bot" branding
+- **Vintage gray background** with thick borders
+- **Monospace font** for that retro computer feel
+- **Real-time status updates** with timestamps
+- **Smart page detection** showing current Instagram page type
+
+### Extension Icon
+- **Instagram-themed icon** with gradient background (pink to purple)
+- **Camera symbol** with "A" for automation
+- **Multiple sizes:** 16px, 32px, 48px, 128px for different contexts
+- **Appears in Chrome toolbar** when installed
+
+### Popup Interface Sections:
+- **Page Detection:** Shows "Followers of @username" or "Following of @username"
+- **Follow Users:** Input field for number (1-50) + "START FOLLOWING" button
+- **Unfollow Users:** Input field for number (1-50) + "START UNFOLLOWING" button  
+- **Status Log:** Real-time updates with timestamps and progress indicators
+
+### Interface States:
+
+#### ✅ **Ready State (Followers Page)**
+```
+┌─────────────────────────┐
+│ Instagram Bot           │
+├─────────────────────────┤
+│ ✅ Ready to follow users│
+│                         │
+│ CURRENT PAGE            │
+│ Followers of @username  │
+│                         │
+│ FOLLOW USERS            │
+│ Number to follow: [10]  │
+│ [START FOLLOWING]       │
+│                         │
+│ STATUS                  │
+│ Ready to follow users   │
+└─────────────────────────┘
+```
+
+#### ✅ **Ready State (Following Page)**
+```
+┌─────────────────────────┐
+│ Instagram Bot           │
+├─────────────────────────┤
+│ ✅ Ready to unfollow    │
+│                         │
+│ CURRENT PAGE            │
+│ Following of @username  │
+│                         │
+│ UNFOLLOW USERS          │
+│ Number to unfollow: [10]│
+│ [START UNFOLLOWING]     │
+│                         │
+│ STATUS                  │
+│ Ready to unfollow users │
+└─────────────────────────┘
+```
+
+#### ⚠️ **Working State (During Automation)**
+```
+┌─────────────────────────┐
+│ Instagram Bot           │
+├─────────────────────────┤
+│ ⏳ Following @user123   │
+│                         │
+│ CURRENT PAGE            │
+│ Followers of @username  │
+│                         │
+│ FOLLOW USERS            │
+│ Number to follow: [10]  │
+│ [START FOLLOWING]       │
+│                         │
+│ STATUS                  │
+│ [6:15:30 PM] ✅ Followed│
+│ @user123 (3/10)        │
+│ ⏳ Waiting 1.8s...      │
+└─────────────────────────┘
+```
+
 ---
 
 ## 🚀 Why Chrome Extension? (Design Choices)
