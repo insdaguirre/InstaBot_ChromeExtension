@@ -123,9 +123,11 @@ function checkCurrentPage() {
     console.log('🔍 Found follow buttons:', followButtons.length);
     console.log('🔍 Found following buttons:', followingButtons.length);
     
+    // If we found buttons, we're definitely on the right page
     if (followButtons.length > 0) {
         const username = extractUsernameFromPage();
         console.log('✅ DETECTED: Followers page via buttons for @', username);
+        console.log('✅ Button detection successful - found', followButtons.length, 'follow buttons');
         return {
             pageType: 'followers',
             pageInfo: `Followers of @${username}`
@@ -135,6 +137,7 @@ function checkCurrentPage() {
     if (followingButtons.length > 0) {
         const username = extractUsernameFromPage();
         console.log('✅ DETECTED: Following page via buttons for @', username);
+        console.log('✅ Button detection successful - found', followingButtons.length, 'following buttons');
         return {
             pageType: 'following',
             pageInfo: `Following of @${username}`
@@ -164,9 +167,30 @@ function checkCurrentPage() {
         };
     }
     
+    // ULTIMATE FALLBACK: Check for any button with "Follow" text anywhere
+    console.log('🔍 ULTIMATE FALLBACK: Checking all buttons on page...');
+    const allButtons = document.querySelectorAll('button');
+    console.log('Total buttons on page:', allButtons.length);
+    
+    for (let i = 0; i < Math.min(allButtons.length, 10); i++) {
+        const button = allButtons[i];
+        const buttonText = button.textContent.toLowerCase().trim();
+        console.log(`Button ${i + 1} text: "${buttonText}"`);
+        
+        if (buttonText === 'follow') {
+            const username = extractUsernameFromPage();
+            console.log('✅ DETECTED: Followers page via ultimate fallback for @', username);
+            return {
+                pageType: 'followers',
+                pageInfo: `Followers of @${username}`
+            };
+        }
+    }
+    
     console.log('❌ Could not detect page type');
     console.log('URL was:', url);
     console.log('Page title was:', document.title);
+    console.log('Total buttons found:', allButtons.length);
     return {
         pageType: 'other',
         pageInfo: 'Not on followers/following page'
@@ -275,37 +299,90 @@ function getRandomDelay() {
 
 // Find follow buttons with compatible selector
 function findFollowButtons() {
-    // Look for buttons with Instagram's specific class structure
+    console.log('🔍 Looking for follow buttons...');
+    
+    // Method 1: Look for buttons with "Follow" text
     const buttons = document.querySelectorAll('button');
-    return Array.from(buttons).filter(button => {
-        // Check if button contains a div with the specific Instagram classes
-        const followDiv = button.querySelector('div._ap3a._aaco._aacw._aad6._aade');
-        if (followDiv) {
-            const buttonText = followDiv.textContent.toLowerCase();
-            return buttonText.includes('follow') && !buttonText.includes('following');
-        }
+    const followButtons = Array.from(buttons).filter(button => {
+        const buttonText = button.textContent.toLowerCase().trim();
+        console.log('🔍 Button text:', buttonText);
         
-        // Fallback: check button text directly
-        const buttonText = button.textContent.toLowerCase();
-        return buttonText.includes('follow') && !buttonText.includes('following');
+        // Check for "Follow" (not "Following" or "Requested")
+        return buttonText === 'follow' || 
+               buttonText.includes('follow') && 
+               !buttonText.includes('following') && 
+               !buttonText.includes('requested');
     });
+    
+    console.log('✅ Found follow buttons:', followButtons.length);
+    
+    // Method 2: Look for buttons with specific Instagram structure
+    if (followButtons.length === 0) {
+        console.log('🔍 Trying alternative button detection...');
+        const allButtons = document.querySelectorAll('button');
+        const alternativeButtons = Array.from(allButtons).filter(button => {
+            // Look for buttons with div containing "Follow"
+            const divs = button.querySelectorAll('div');
+            for (let div of divs) {
+                const divText = div.textContent.toLowerCase().trim();
+                if (divText === 'follow') {
+                    console.log('✅ Found follow button via div structure');
+                    return true;
+                }
+            }
+            return false;
+        });
+        
+        if (alternativeButtons.length > 0) {
+            console.log('✅ Found follow buttons via alternative method:', alternativeButtons.length);
+            return alternativeButtons;
+        }
+    }
+    
+    return followButtons;
 }
 
 // Find following buttons with compatible selector
 function findFollowingButtons() {
+    console.log('🔍 Looking for following buttons...');
+    
+    // Method 1: Look for buttons with "Following" text
     const buttons = document.querySelectorAll('button');
-    return Array.from(buttons).filter(button => {
-        // Check if button contains a div with the specific Instagram classes
-        const followDiv = button.querySelector('div._ap3a._aaco._aacw._aad6._aade');
-        if (followDiv) {
-            const buttonText = followDiv.textContent.toLowerCase();
-            return buttonText.includes('following');
-        }
+    const followingButtons = Array.from(buttons).filter(button => {
+        const buttonText = button.textContent.toLowerCase().trim();
+        console.log('🔍 Button text:', buttonText);
         
-        // Fallback: check button text directly
-        const buttonText = button.textContent.toLowerCase();
-        return buttonText.includes('following');
+        // Check for "Following"
+        return buttonText === 'following' || 
+               buttonText.includes('following');
     });
+    
+    console.log('✅ Found following buttons:', followingButtons.length);
+    
+    // Method 2: Look for buttons with specific Instagram structure
+    if (followingButtons.length === 0) {
+        console.log('🔍 Trying alternative following button detection...');
+        const allButtons = document.querySelectorAll('button');
+        const alternativeButtons = Array.from(allButtons).filter(button => {
+            // Look for buttons with div containing "Following"
+            const divs = button.querySelectorAll('div');
+            for (let div of divs) {
+                const divText = div.textContent.toLowerCase().trim();
+                if (divText === 'following') {
+                    console.log('✅ Found following button via div structure');
+                    return true;
+                }
+            }
+            return false;
+        });
+        
+        if (alternativeButtons.length > 0) {
+            console.log('✅ Found following buttons via alternative method:', alternativeButtons.length);
+            return alternativeButtons;
+        }
+    }
+    
+    return followingButtons;
 }
 
 // Start following users
