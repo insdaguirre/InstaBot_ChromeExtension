@@ -1,6 +1,6 @@
 # 📸 Instagram Bot - Chrome Extension
 
-![Instagram Bot Extension](gui.png)
+![Instagram Bot Extension](render.png)
 
 A Chrome extension for Instagram automation that works directly in your browser. Follow and unfollow users with precise control while using your real Instagram session.
 
