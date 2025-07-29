@@ -2,7 +2,7 @@
 
 ![Instagram Bot Extension](render.png)
 
-A Chrome extension for Instagram automation that works directly in your browser. Follow and unfollow users with precise control while using your real Instagram session.
+A Chrome extension for Instagram automation that works directly in your browser. Follow users in batches and unfollow them selectively using search-based detection.
 
 ---
 
@@ -19,6 +19,15 @@ A Chrome extension for Instagram automation that works directly in your browser.
 
 ## 🛠️ How It Works
 
+### Batch-Based System
+
+The extension uses a **batch-based approach** for better organization and control:
+
+1. **Follow Sessions:** Each follow session creates a new batch with timestamp
+2. **Batch Storage:** Usernames are stored in batches with creation timestamps
+3. **Selective Unfollow:** Choose specific batches to unfollow instead of all users
+4. **Search-Based Unfollow:** Uses Instagram's search to find specific users efficiently
+
 ### Chrome Extension Workflow
 
 1. **Install the Extension:** Load the extension into Chrome
@@ -27,8 +36,8 @@ A Chrome extension for Instagram automation that works directly in your browser.
    - **For Following:** Navigate to any user's followers page
    - **For Unfollowing:** Navigate to your own following page
 4. **Open Extension:** Click the extension icon in Chrome
-5. **Set Count & Start:** Enter the number of users and click start
-6. **Automated Actions:** The extension follows/unfollows the exact number you specified
+5. **Follow/Unfollow:** Enter count to follow or select batch to unfollow
+6. **Automated Actions:** The extension performs the actions with smart delays
 
 ---
 
@@ -84,8 +93,8 @@ graph LR;
    - **To Unfollow:** Go to your own profile → Click "following"
 3. **Click the extension icon** in Chrome toolbar
 4. **The popup will detect the page type** and show appropriate options
-5. **Enter the number** of users to follow/unfollow (1-50)
-6. **Click START** and watch the automation work
+5. **Follow:** Enter number of users to follow (1-50) → Click "START FOLLOWING"
+6. **Unfollow:** Select a batch from dropdown → Click "START UNFOLLOWING"
 7. **Monitor progress** in the status area
 
 ---
@@ -94,22 +103,31 @@ graph LR;
 
 ### Follow Logic
 - **Context Aware:** Automatically detects if you're on followers (follow) or following (unfollow) page
-- **Exact Count:** Follows/unfollows exactly the number you specify
+- **Batch Creation:** Each follow session creates a new batch with timestamp
+- **Exact Count:** Follows exactly the number you specify
 - **Smart Scrolling:** Automatically scrolls to find more users if needed
-- **1-Second Delays:** Waits 1 second between each action
-- **Username Extraction:** Logs usernames for each action taken
+- **Random Delays:** 0.7-2.5 second delays between each action
+- **Username Storage:** Saves usernames to batches for later unfollowing
+
+### Unfollow Logic
+- **Search-Based Detection:** Uses Instagram's search to find specific users
+- **Batch Selection:** Choose which batch to unfollow from dropdown
+- **Smart Timing:** 1-2.5s search delay + 1-2s click delay + 0.7-2.5s between users
+- **Complete Batch Processing:** Unfollows entire selected batch automatically
+- **Automatic Cleanup:** Removes empty batches after unfollowing
 
 ### Page Detection
 - **Followers Page:** Shows "Follow Users" option
-- **Following Page:** Shows "Unfollow Users" option  
+- **Following Page:** Shows "Unfollow Users" option with batch selection
 - **Other Pages:** Shows navigation instructions
 
 ### Safety Features
 - **Session Management:** Uses your real browser session (no separate login)
 - **Manual Navigation:** You control which pages to automate
-- **Rate Limiting:** Built-in delays to prevent Instagram rate limits
+- **Rate Limiting:** Multiple random delays to prevent Instagram rate limits
 - **Status Updates:** Real-time feedback on progress
 - **Error Handling:** Graceful handling of missing elements or Instagram changes
+- **Batch Organization:** Prevents accidentally unfollowing wrong users
 
 ---
 
@@ -144,20 +162,24 @@ graph LR;
 2. Click "followers" to open the followers list
 3. Click the extension icon
 4. Enter number to follow and click "START FOLLOWING"
+5. The extension creates a new batch with timestamp
 
 ### To Unfollow Users:
 1. Go to your own Instagram profile  
 2. Click "following" to open your following list
 3. Click the extension icon
-4. Enter number to unfollow and click "START UNFOLLOWING"
+4. Select a batch from the dropdown
+5. Click "START UNFOLLOWING" to unfollow entire batch
+6. The extension searches for each user and unfollows them
 
 ---
 
 ## 🛡️ Safety & Detection
 
 - **Undetectable:** Uses your real browser session and manual navigation
-- **Natural Timing:** 1-second delays between actions mimic human behavior
-- **No Automation Detection:** Since you manually navigate and use real session
+- **Natural Timing:** Multiple random delays mimic human behavior
+- **Search-Based:** Uses Instagram's own search functionality
+- **Batch Organization:** Prevents accidentally unfollowing wrong users
 - **Rate Limit Aware:** Stops if Instagram blocks actions
 - **Manual Override:** You can stop automation at any time by closing the popup
 
