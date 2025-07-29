@@ -511,7 +511,7 @@ async function startFollowing(count) {
     }
 }
 
-// Start unfollowing users from a specific batch using direct navigation
+// Start unfollowing users from a specific batch using search within following list
 async function startUnfollowingBatch(batchIndex, count) {
     isRunning = true;
     let unfollowed = 0;
@@ -525,43 +525,52 @@ async function startUnfollowingBatch(batchIndex, count) {
     const batch = followedBatches[batchIndex];
     const batchUsernames = [...batch.usernames]; // Create a copy to work with
     
-    updateStatus(`🎯 Starting direct unfollow for batch ${batchIndex + 1}...`);
+    updateStatus(`🎯 Starting search-based unfollow for batch ${batchIndex + 1}...`);
     updateStatus(`📋 Found ${batchUsernames.length} users in batch ${batchIndex + 1}`);
     
     try {
-        // Process each username in the batch directly
+        // Wait for modal to be ready
+        await waitForElement('div[role="dialog"]', 5000);
+        
+        // Process each username in the batch
         for (let i = 0; i < Math.min(count, batchUsernames.length); i++) {
             const username = batchUsernames[i];
             
             if (!username) continue;
             
-            updateStatus(`🎯 Navigating to @${username} (${unfollowed + 1}/${count})`);
+            updateStatus(`🔍 Searching for @${username} (${unfollowed + 1}/${count})`);
             
-            // Navigate directly to the user's profile
-            const profileUrl = `https://www.instagram.com/${username}/`;
-            window.location.href = profileUrl;
+            // Find and use the search input
+            const searchInput = findSearchInput();
+            if (!searchInput) {
+                updateStatus(`❌ Could not find search input`);
+                continue;
+            }
             
-            // Wait for page to load
-            await sleep(3000);
+            // Clear search input and type username
+            searchInput.value = username;
+            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            searchInput.dispatchEvent(new Event('change', { bubbles: true }));
             
-            // Wait for profile page to be ready
-            await waitForElement('main', 10000);
+            // Random delay after searching (1-2.5 seconds)
+            const searchDelay = getRandomDelay() + 0.5; // Add 0.5s to make it 1-2.5s
+            updateStatus(`⏳ Waiting ${searchDelay.toFixed(1)}s after searching for @${username}...`);
+            await sleep(searchDelay * 1000);
             
-            // Look for the follow button on their profile
-            const followButton = findFollowButtonOnProfile();
-            
-            if (followButton) {
+            // Look for the user in search results
+            const userResult = findUserInSearchResults(username);
+            if (userResult) {
                 updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count})`);
                 
-                // Random delay before clicking
-                const delay = getRandomDelay();
-                updateStatus(`⏳ Waiting ${delay.toFixed(1)}s before unfollowing @${username}...`);
-                await sleep(delay * 1000);
+                // Random delay before clicking follow button
+                const clickDelay = getRandomDelay();
+                updateStatus(`⏳ Waiting ${clickDelay.toFixed(1)}s before unfollowing @${username}...`);
+                await sleep(clickDelay * 1000);
                 
-                // Click the follow button
-                followButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Click the following button
+                userResult.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 await sleep(500);
-                followButton.click();
+                userResult.click();
                 
                 // Wait for and click unfollow confirmation
                 await sleep(1000);
@@ -588,8 +597,13 @@ async function startUnfollowingBatch(batchIndex, count) {
                     updateStatus(`⚠️ Could not find unfollow confirmation for @${username}`);
                 }
             } else {
-                updateStatus(`⚠️ Could not find follow button for @${username} - may not be following them`);
+                updateStatus(`⚠️ Could not find @${username} in search results`);
             }
+            
+            // Clear search for next iteration
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            await sleep(1000);
         }
         
         // Remove empty batch
@@ -624,47 +638,86 @@ function findUnfollowButton() {
     });
 }
 
-// Find follow button on a user's profile page
-function findFollowButtonOnProfile() {
-    console.log('🔍 Looking for follow button on profile page...');
+// Find search input in the following modal
+function findSearchInput() {
+    console.log('🔍 Looking for search input...');
     
-    // Method 1: Look for buttons with "Following" text (indicating we're following them)
+    // Method 1: Look for input with the specific class from the HTML you provided
+    const searchInputs = document.querySelectorAll('input[aria-label="Search input"]');
+    if (searchInputs.length > 0) {
+        console.log('✅ Found search input via aria-label');
+        return searchInputs[0];
+    }
+    
+    // Method 2: Look for input with placeholder "Search"
+    const placeholderInputs = document.querySelectorAll('input[placeholder="Search"]');
+    if (placeholderInputs.length > 0) {
+        console.log('✅ Found search input via placeholder');
+        return placeholderInputs[0];
+    }
+    
+    // Method 3: Look for input with specific class pattern
+    const classInputs = document.querySelectorAll('input.x1lugfcp');
+    if (classInputs.length > 0) {
+        console.log('✅ Found search input via class');
+        return classInputs[0];
+    }
+    
+    console.log('❌ Could not find search input');
+    return null;
+}
+
+// Find user in search results
+function findUserInSearchResults(targetUsername) {
+    console.log(`🔍 Looking for @${targetUsername} in search results...`);
+    
+    // Method 1: Look for buttons with "Following" text near the username
     const buttons = document.querySelectorAll('button');
     const followingButtons = Array.from(buttons).filter(button => {
         const buttonText = button.textContent.toLowerCase().trim();
-        console.log('🔍 Button text:', buttonText);
-        
-        // Check for "Following" (indicating we're following them)
-        return buttonText === 'following' || 
-               buttonText.includes('following');
+        return buttonText === 'following' || buttonText.includes('following');
     });
     
-    console.log('✅ Found following buttons on profile:', followingButtons.length);
-    
-    // Method 2: Look for buttons with specific Instagram structure
-    if (followingButtons.length === 0) {
-        console.log('🔍 Trying alternative following button detection...');
-        const allButtons = document.querySelectorAll('button');
-        const alternativeButtons = Array.from(allButtons).filter(button => {
-            // Look for buttons with div containing "Following"
-            const divs = button.querySelectorAll('div');
-            for (let div of divs) {
-                const divText = div.textContent.toLowerCase().trim();
-                if (divText === 'following') {
-                    console.log('✅ Found following button via div structure');
-                    return true;
+    // Check each following button to see if it's near the target username
+    for (let button of followingButtons) {
+        // Look for username in the same container or nearby
+        const container = button.closest('div[role="dialog"] div');
+        if (container) {
+            const links = container.querySelectorAll('a[href*="/"]');
+            for (let link of links) {
+                const href = link.href;
+                const match = href.match(/instagram\.com\/([^\/\?]+)/);
+                if (match && match[1] === targetUsername) {
+                    console.log(`✅ Found @${targetUsername} in search results`);
+                    return button;
                 }
             }
-            return false;
-        });
-        
-        if (alternativeButtons.length > 0) {
-            console.log('✅ Found following buttons via alternative method:', alternativeButtons.length);
-            return alternativeButtons[0]; // Return the first one
         }
     }
     
-    return followingButtons.length > 0 ? followingButtons[0] : null;
+    // Method 2: Look for username in any link and find nearby following button
+    const allLinks = document.querySelectorAll('a[href*="/"]');
+    for (let link of allLinks) {
+        const href = link.href;
+        const match = href.match(/instagram\.com\/([^\/\?]+)/);
+        if (match && match[1] === targetUsername) {
+            // Find the following button near this link
+            const container = link.closest('div');
+            if (container) {
+                const nearbyButton = container.querySelector('button');
+                if (nearbyButton) {
+                    const buttonText = nearbyButton.textContent.toLowerCase().trim();
+                    if (buttonText === 'following' || buttonText.includes('following')) {
+                        console.log(`✅ Found @${targetUsername} in search results via link`);
+                        return nearbyButton;
+                    }
+                }
+            }
+        }
+    }
+    
+    console.log(`❌ Could not find @${targetUsername} in search results`);
+    return null;
 }
 
 // Get username from a follow/following button
