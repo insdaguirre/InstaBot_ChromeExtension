@@ -621,9 +621,11 @@ async function startUnfollowingBatch(batchIndex, count) {
             updateStatus(`🗑️ Removed empty batch ${batchIndex + 1}`);
         }
         
-        const message = unfollowed === count 
+        // Handle the case where count is -1 (unfollow entire batch)
+        const targetCount = count === -1 ? batchUsernames.length : count;
+        const message = unfollowed === targetCount 
             ? `🎉 Successfully unfollowed ${unfollowed} users from batch ${batchIndex + 1}!`
-            : `⚠️ Unfollowed ${unfollowed}/${count} users from batch ${batchIndex + 1} (no more available)`;
+            : `⚠️ Unfollowed ${unfollowed}/${targetCount} users from batch ${batchIndex + 1} (no more available)`;
             
         updateStatus(message);
         return {message};
