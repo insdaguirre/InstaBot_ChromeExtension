@@ -558,6 +558,10 @@ async function startUnfollowingBatch(batchIndex, count) {
             updateStatus(`⏳ Waiting ${searchDelay.toFixed(1)}s after searching for @${username}...`);
             await sleep(searchDelay * 1000);
             
+            // Wait for search results to load
+            updateStatus(`⏳ Waiting for search results to load...`);
+            await sleep(2000); // Additional wait for search results
+            
             // Look for the user in search results
             const userResult = findUserInSearchResults(username);
             if (userResult) {
@@ -681,47 +685,94 @@ function findSearchInput() {
 function findUserInSearchResults(targetUsername) {
     console.log(`🔍 Looking for @${targetUsername} in search results...`);
     
+    // Debug: Log all buttons and their text
+    const allButtons = document.querySelectorAll('button');
+    console.log(`🔍 Found ${allButtons.length} total buttons on page`);
+    allButtons.forEach((button, index) => {
+        console.log(`Button ${index}: "${button.textContent.trim()}"`);
+    });
+    
     // Method 1: Look for buttons with "Following" text near the username
-    const buttons = document.querySelectorAll('button');
-    const followingButtons = Array.from(buttons).filter(button => {
+    const followingButtons = Array.from(allButtons).filter(button => {
         const buttonText = button.textContent.toLowerCase().trim();
+        console.log(`🔍 Checking button: "${buttonText}"`);
         return buttonText === 'following' || buttonText.includes('following');
     });
     
+    console.log(`🔍 Found ${followingButtons.length} following buttons`);
+    
     // Check each following button to see if it's near the target username
     for (let button of followingButtons) {
-        // Look for username in the same container or nearby
+        console.log(`🔍 Checking following button: "${button.textContent.trim()}"`);
+        
+        // Method 1A: Look for username in the same container
         const container = button.closest('div[role="dialog"] div');
         if (container) {
             const links = container.querySelectorAll('a[href*="/"]');
+            console.log(`🔍 Found ${links.length} links in container`);
             for (let link of links) {
                 const href = link.href;
                 const match = href.match(/instagram\.com\/([^\/\?]+)/);
                 if (match && match[1] === targetUsername) {
-                    console.log(`✅ Found @${targetUsername} in search results`);
+                    console.log(`✅ Found @${targetUsername} in search results via container`);
                     return button;
                 }
             }
+        }
+        
+        // Method 1B: Look for username in parent containers
+        let parent = button.parentElement;
+        for (let i = 0; i < 5; i++) {
+            if (!parent) break;
+            const links = parent.querySelectorAll('a[href*="/"]');
+            for (let link of links) {
+                const href = link.href;
+                const match = href.match(/instagram\.com\/([^\/\?]+)/);
+                if (match && match[1] === targetUsername) {
+                    console.log(`✅ Found @${targetUsername} in search results via parent ${i}`);
+                    return button;
+                }
+            }
+            parent = parent.parentElement;
         }
     }
     
     // Method 2: Look for username in any link and find nearby following button
     const allLinks = document.querySelectorAll('a[href*="/"]');
+    console.log(`🔍 Found ${allLinks.length} total links on page`);
     for (let link of allLinks) {
         const href = link.href;
         const match = href.match(/instagram\.com\/([^\/\?]+)/);
         if (match && match[1] === targetUsername) {
+            console.log(`🔍 Found link for @${targetUsername}: ${href}`);
+            
             // Find the following button near this link
             const container = link.closest('div');
             if (container) {
                 const nearbyButton = container.querySelector('button');
                 if (nearbyButton) {
                     const buttonText = nearbyButton.textContent.toLowerCase().trim();
+                    console.log(`🔍 Nearby button text: "${buttonText}"`);
                     if (buttonText === 'following' || buttonText.includes('following')) {
                         console.log(`✅ Found @${targetUsername} in search results via link`);
                         return nearbyButton;
                     }
                 }
+            }
+            
+            // Method 2B: Look for buttons in nearby containers
+            let parent = link.parentElement;
+            for (let i = 0; i < 3; i++) {
+                if (!parent) break;
+                const buttons = parent.querySelectorAll('button');
+                for (let button of buttons) {
+                    const buttonText = button.textContent.toLowerCase().trim();
+                    if (buttonText === 'following' || buttonText.includes('following')) {
+                        console.log(`✅ Found @${targetUsername} in search results via nearby button`);
+                        return button;
+                    }
+                }
+                parent = parent.parentElement;
             }
         }
     }
