@@ -1,21 +1,30 @@
 // content.js - Runs on Instagram pages and performs automation
 
 let isRunning = false;
-let followedUsernames = []; // Store usernames of accounts we've followed
+let followedBatches = []; // Store batches of followed users with timestamps
 
-// Load followed usernames from storage
-chrome.storage.local.get(['followedUsernames'], function(result) {
-    if (result.followedUsernames) {
-        followedUsernames = result.followedUsernames;
-        console.log('📋 Loaded', followedUsernames.length, 'followed usernames from storage');
+// Load followed batches from storage
+chrome.storage.local.get(['followedBatches'], function(result) {
+    if (result.followedBatches) {
+        followedBatches = result.followedBatches;
+        console.log('📋 Loaded', followedBatches.length, 'followed batches from storage');
     }
 });
 
-// Save followed usernames to storage
-function saveFollowedUsernames() {
-    chrome.storage.local.set({followedUsernames: followedUsernames}, function() {
-        console.log('💾 Saved', followedUsernames.length, 'followed usernames to storage');
+// Save followed batches to storage
+function saveFollowedBatches() {
+    chrome.storage.local.set({followedBatches: followedBatches}, function() {
+        console.log('💾 Saved', followedBatches.length, 'followed batches to storage');
     });
+}
+
+// Get all usernames from all batches
+function getAllFollowedUsernames() {
+    let allUsernames = [];
+    followedBatches.forEach(batch => {
+        allUsernames = allUsernames.concat(batch.usernames);
+    });
+    return allUsernames;
 }
 
 // Listen for messages from popup
@@ -41,12 +50,21 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             sendResponse({message: "❌ Already running, please wait..."});
         }
         return true; // Indicates we will respond asynchronously
-    } else if (request.action === 'getFollowedCount') {
-        sendResponse({count: followedUsernames.length});
-    } else if (request.action === 'clearFollowedList') {
-        followedUsernames = [];
-        saveFollowedUsernames();
-        sendResponse({message: "🗑️ Cleared followed usernames list"});
+    } else if (request.action === 'getFollowedBatches') {
+        sendResponse({batches: followedBatches});
+    } else if (request.action === 'clearFollowedBatches') {
+        followedBatches = [];
+        saveFollowedBatches();
+        sendResponse({message: "🗑️ Cleared all followed batches"});
+    } else if (request.action === 'unfollowBatch') {
+        if (!isRunning) {
+            startUnfollowingBatch(request.batchIndex, request.count).then(result => {
+                sendResponse(result);
+            });
+        } else {
+            sendResponse({message: "❌ Already running, please wait..."});
+        }
+        return true; // Indicates we will respond asynchronously
     }
 });
 
@@ -389,6 +407,7 @@ function findFollowingButtons() {
 async function startFollowing(count) {
     isRunning = true;
     let followed = 0;
+    let currentBatchUsernames = []; // Store usernames for this batch
     
     updateStatus(`🎯 Looking for follow buttons...`);
     
@@ -423,11 +442,10 @@ async function startFollowing(count) {
                     if (username) {
                         updateStatus(`⏳ Following @${username} (${followed + 1}/${count})`);
                         
-                        // Add to followed list
-                        if (!followedUsernames.includes(username)) {
-                            followedUsernames.push(username);
-                            saveFollowedUsernames();
-                            console.log('📋 Added', username, 'to followed list');
+                        // Add to current batch
+                        if (!currentBatchUsernames.includes(username)) {
+                            currentBatchUsernames.push(username);
+                            console.log('📋 Added', username, 'to current batch');
                         }
                         
                         // Random delay before clicking
@@ -465,6 +483,18 @@ async function startFollowing(count) {
             attempts++;
         }
         
+        // Save the batch if we followed any users
+        if (currentBatchUsernames.length > 0) {
+            const batch = {
+                timestamp: new Date().toISOString(),
+                count: currentBatchUsernames.length,
+                usernames: currentBatchUsernames
+            };
+            followedBatches.push(batch);
+            saveFollowedBatches();
+            updateStatus(`📦 Saved batch with ${currentBatchUsernames.length} users`);
+        }
+        
         const message = followed === count 
             ? `🎉 Successfully followed ${followed} users!`
             : `⚠️ Followed ${followed}/${count} users (no more available)`;
@@ -481,13 +511,22 @@ async function startFollowing(count) {
     }
 }
 
-// Start unfollowing users
-async function startUnfollowing(count) {
+// Start unfollowing users from a specific batch
+async function startUnfollowingBatch(batchIndex, count) {
     isRunning = true;
     let unfollowed = 0;
     
-    updateStatus(`🎯 Looking for users from followed list...`);
-    updateStatus(`📋 Found ${followedUsernames.length} users in followed list`);
+    // Validate batch index
+    if (batchIndex < 0 || batchIndex >= followedBatches.length) {
+        updateStatus(`❌ Invalid batch index: ${batchIndex}`);
+        return {message: `❌ Invalid batch index: ${batchIndex}`};
+    }
+    
+    const batch = followedBatches[batchIndex];
+    const batchUsernames = batch.usernames;
+    
+    updateStatus(`🎯 Looking for users from batch ${batchIndex + 1}...`);
+    updateStatus(`📋 Found ${batchUsernames.length} users in batch ${batchIndex + 1}`);
     
     try {
         // Wait for modal to be ready
@@ -516,9 +555,9 @@ async function startUnfollowing(count) {
                     const username = getUsernameFromButton(button);
                     
                     if (username) {
-                        // Check if username is in followed list
-                        if (followedUsernames.includes(username)) {
-                            updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count}) - from followed list`);
+                        // Check if username is in the selected batch
+                        if (batchUsernames.includes(username)) {
+                            updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count}) - from batch ${batchIndex + 1}`);
                             
                             // Random delay before clicking
                             const delay = getRandomDelay();
@@ -539,12 +578,12 @@ async function startUnfollowing(count) {
                             
                             unfollowed++;
                             
-                            // Remove from followed list
-                            const index = followedUsernames.indexOf(username);
+                            // Remove from batch
+                            const index = batchUsernames.indexOf(username);
                             if (index > -1) {
-                                followedUsernames.splice(index, 1);
-                                saveFollowedUsernames();
-                                console.log('📋 Removed', username, 'from followed list');
+                                batchUsernames.splice(index, 1);
+                                saveFollowedBatches();
+                                console.log('📋 Removed', username, 'from batch', batchIndex + 1);
                             }
                             
                             updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${count})`);
@@ -554,7 +593,7 @@ async function startUnfollowing(count) {
                             updateStatus(`⏳ Waiting ${nextDelay.toFixed(1)}s before next unfollow...`);
                             await sleep(nextDelay * 1000);
                         } else {
-                            updateStatus(`⚠️ Skipping @${username} - not in followed list`);
+                            updateStatus(`⚠️ Skipping @${username} - not in batch ${batchIndex + 1}`);
                         }
                     }
                 } catch (error) {
@@ -571,9 +610,16 @@ async function startUnfollowing(count) {
             attempts++;
         }
         
+        // Remove empty batch
+        if (batchUsernames.length === 0) {
+            followedBatches.splice(batchIndex, 1);
+            saveFollowedBatches();
+            updateStatus(`🗑️ Removed empty batch ${batchIndex + 1}`);
+        }
+        
         const message = unfollowed === count 
-            ? `🎉 Successfully unfollowed ${unfollowed} users!`
-            : `⚠️ Unfollowed ${unfollowed}/${count} users (no more available)`;
+            ? `🎉 Successfully unfollowed ${unfollowed} users from batch ${batchIndex + 1}!`
+            : `⚠️ Unfollowed ${unfollowed}/${count} users from batch ${batchIndex + 1} (no more available)`;
             
         updateStatus(message);
         return {message};

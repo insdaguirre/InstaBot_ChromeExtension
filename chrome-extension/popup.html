@@ -120,10 +120,10 @@
         </div>
         
         <div class="section">
-            <div class="section-title">FOLLOWED LIST</div>
-            <div id="followedCount">📋 Followed: 0 users</div>
+            <div class="section-title">FOLLOWED BATCHES</div>
+            <div id="batchesList">📋 No batches yet</div>
             <br>
-            <button id="clearList">🗑️ CLEAR LIST</button>
+            <button id="clearBatches">🗑️ CLEAR ALL BATCHES</button>
         </div>
         
         <div class="action-section" id="followSection">
@@ -139,6 +139,10 @@
         <div class="action-section" id="unfollowSection">
             <div class="section">
                 <div class="section-title">UNFOLLOW USERS</div>
+                <label>Select batch:</label>
+                <select id="batchSelect" style="width: 100%; margin-bottom: 8px; padding: 4px; border: 2px inset #808080; font-family: 'Courier New', monospace; font-size: 10px;">
+                    <option value="">No batches available</option>
+                </select>
                 <label>Number to unfollow:</label>
                 <input type="number" id="unfollowCount" value="10" min="1" max="50">
                 <br><br>

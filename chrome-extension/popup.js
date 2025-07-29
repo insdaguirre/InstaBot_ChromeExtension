@@ -10,7 +10,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const startUnfollowBtn = document.getElementById('startUnfollow');
     const followCountInput = document.getElementById('followCount');
     const unfollowCountInput = document.getElementById('unfollowCount');
-    const followedCountDiv = document.getElementById('followedCount');
+    const batchesListDiv = document.getElementById('batchesList');
+    const batchSelect = document.getElementById('batchSelect');
 
     // Check current page when popup opens
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -24,18 +25,46 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
         
-        // Get followed count
-        chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedCount'}, function(response) {
+        // Get followed batches
+        chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedBatches'}, function(response) {
             if (response) {
-                updateFollowedCount(response.count);
+                updateBatchesList(response.batches);
             }
         });
     });
 
-    // Update followed count display
-    function updateFollowedCount(count) {
-        if (followedCountDiv) {
-            followedCountDiv.textContent = `📋 Followed: ${count} users`;
+    // Update batches list display
+    function updateBatchesList(batches) {
+        if (batchesListDiv) {
+            if (batches && batches.length > 0) {
+                let totalUsers = 0;
+                batches.forEach(batch => {
+                    totalUsers += batch.count;
+                });
+                batchesListDiv.textContent = `📋 ${batches.length} batches, ${totalUsers} total users`;
+            } else {
+                batchesListDiv.textContent = `📋 No batches yet`;
+            }
+        }
+        
+        // Update batch select dropdown
+        if (batchSelect) {
+            batchSelect.innerHTML = '';
+            if (batches && batches.length > 0) {
+                batches.forEach((batch, index) => {
+                    const date = new Date(batch.timestamp);
+                    const timeStr = date.toLocaleString();
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = `Batch ${index + 1}: ${batch.count} users (${timeStr})`;
+                    batchSelect.appendChild(option);
+                });
+            } else {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No batches available';
+                batchSelect.appendChild(option);
+            }
         }
     }
 
@@ -82,10 +111,10 @@ document.addEventListener('DOMContentLoaded', function() {
             }, function(response) {
                 if (response) {
                     updateStatus(response.message);
-                    // Update followed count after following
-                    chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedCount'}, function(countResponse) {
-                        if (countResponse) {
-                            updateFollowedCount(countResponse.count);
+                    // Update batches list after following
+                    chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedBatches'}, function(batchesResponse) {
+                        if (batchesResponse) {
+                            updateBatchesList(batchesResponse.batches);
                         }
                     });
                 }
@@ -97,25 +126,33 @@ document.addEventListener('DOMContentLoaded', function() {
     // Start unfollowing users
     startUnfollowBtn.addEventListener('click', function() {
         const count = parseInt(unfollowCountInput.value);
+        const batchIndex = parseInt(batchSelect.value);
+        
         if (!count || count < 1 || count > 50) {
             updateStatus("❌ Please enter a number between 1 and 50");
             return;
         }
+        
+        if (batchIndex === undefined || batchIndex < 0) {
+            updateStatus("❌ Please select a batch to unfollow from");
+            return;
+        }
 
         startUnfollowBtn.disabled = true;
-        updateStatus(`🚀 Starting to unfollow ${count} users...`);
+        updateStatus(`🚀 Starting to unfollow ${count} users from batch ${batchIndex + 1}...`);
 
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
             chrome.tabs.sendMessage(tabs[0].id, {
-                action: 'startUnfollowing',
+                action: 'unfollowBatch',
+                batchIndex: batchIndex,
                 count: count
             }, function(response) {
                 if (response) {
                     updateStatus(response.message);
-                    // Update followed count after unfollowing
-                    chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedCount'}, function(countResponse) {
-                        if (countResponse) {
-                            updateFollowedCount(countResponse.count);
+                    // Update batches list after unfollowing
+                    chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedBatches'}, function(batchesResponse) {
+                        if (batchesResponse) {
+                            updateBatchesList(batchesResponse.batches);
                         }
                     });
                 }
@@ -124,15 +161,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Clear followed list button
-    const clearListBtn = document.getElementById('clearList');
-    if (clearListBtn) {
-        clearListBtn.addEventListener('click', function() {
+    // Clear all batches button
+    const clearBatchesBtn = document.getElementById('clearBatches');
+    if (clearBatchesBtn) {
+        clearBatchesBtn.addEventListener('click', function() {
             chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {action: 'clearFollowedList'}, function(response) {
+                chrome.tabs.sendMessage(tabs[0].id, {action: 'clearFollowedBatches'}, function(response) {
                     if (response) {
                         updateStatus(response.message);
-                        updateFollowedCount(0);
+                        updateBatchesList([]);
                     }
                 });
             });
