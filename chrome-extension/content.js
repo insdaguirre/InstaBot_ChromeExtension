@@ -560,6 +560,13 @@ async function startUnfollowingBatch(batchIndex, count) {
             // Look for the user in search results
             const userResult = findUserInSearchResults(username);
             if (userResult) {
+                updateStatus(`⏳ Found @${username} in search results`);
+                
+                // Random delay between search and clicking follow button (1-2 seconds)
+                const searchToClickDelay = Math.random() * (2 - 1) + 1;
+                updateStatus(`⏳ Waiting ${searchToClickDelay.toFixed(1)}s between search and unfollow...`);
+                await sleep(searchToClickDelay * 1000);
+                
                 updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count})`);
                 
                 // Random delay before clicking follow button
