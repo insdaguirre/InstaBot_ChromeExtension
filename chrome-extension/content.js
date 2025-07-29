@@ -535,6 +535,9 @@ async function startUnfollowingBatch(batchIndex, count) {
         let attempts = 0;
         let maxAttempts = 20;
         
+        let processedUsernames = new Set(); // Track processed usernames to avoid infinite loops
+        let consecutiveSkips = 0; // Track consecutive skips to detect when we're stuck
+        
         while (unfollowed < count && attempts < maxAttempts) {
             const followingButtons = findFollowingButtons();
             
@@ -546,6 +549,8 @@ async function startUnfollowingBatch(batchIndex, count) {
                 continue;
             }
             
+            let foundBatchUser = false; // Track if we found any user from the batch on this page
+            
             // Process visible following buttons
             for (let button of followingButtons) {
                 if (unfollowed >= count) break;
@@ -555,8 +560,18 @@ async function startUnfollowingBatch(batchIndex, count) {
                     const username = getUsernameFromButton(button);
                     
                     if (username) {
+                        // Skip if we've already processed this username on this page
+                        if (processedUsernames.has(username)) {
+                            continue;
+                        }
+                        
+                        processedUsernames.add(username);
+                        
                         // Check if username is in the selected batch
                         if (batchUsernames.includes(username)) {
+                            foundBatchUser = true;
+                            consecutiveSkips = 0; // Reset skip counter
+                            
                             updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count}) - from batch ${batchIndex + 1}`);
                             
                             // Random delay before clicking
@@ -593,7 +608,8 @@ async function startUnfollowingBatch(batchIndex, count) {
                             updateStatus(`⏳ Waiting ${nextDelay.toFixed(1)}s before next unfollow...`);
                             await sleep(nextDelay * 1000);
                         } else {
-                            updateStatus(`⚠️ Skipping @${username} - not in batch ${batchIndex + 1}`);
+                            consecutiveSkips++;
+                            updateStatus(`⚠️ Skipping @${username} - not in batch ${batchIndex + 1} (skip ${consecutiveSkips})`);
                         }
                     }
                 } catch (error) {
@@ -601,13 +617,25 @@ async function startUnfollowingBatch(batchIndex, count) {
                 }
             }
             
-            // Scroll to load more users if needed
-            if (unfollowed < count) {
+            // Clear processed usernames for next page
+            processedUsernames.clear();
+            
+            // Check if we're stuck (no batch users found on this page)
+            if (!foundBatchUser) {
+                updateStatus(`📜 No batch users found on current page, scrolling...`);
                 scrollModal();
                 await sleep(2000);
+                attempts++;
+                
+                // If we've skipped too many consecutive users, we might be stuck
+                if (consecutiveSkips > 50) {
+                    updateStatus(`⚠️ Too many consecutive skips (${consecutiveSkips}), stopping to avoid infinite loop`);
+                    break;
+                }
+            } else {
+                // Reset attempts if we found batch users
+                attempts = 0;
             }
-            
-            attempts++;
         }
         
         // Remove empty batch
