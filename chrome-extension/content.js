@@ -511,7 +511,7 @@ async function startFollowing(count) {
     }
 }
 
-// Start unfollowing users from a specific batch
+// Start unfollowing users from a specific batch using direct navigation
 async function startUnfollowingBatch(batchIndex, count) {
     isRunning = true;
     let unfollowed = 0;
@@ -523,123 +523,77 @@ async function startUnfollowingBatch(batchIndex, count) {
     }
     
     const batch = followedBatches[batchIndex];
-    const batchUsernames = batch.usernames;
+    const batchUsernames = [...batch.usernames]; // Create a copy to work with
     
-    updateStatus(`🎯 Looking for users from batch ${batchIndex + 1}...`);
+    updateStatus(`🎯 Starting direct unfollow for batch ${batchIndex + 1}...`);
     updateStatus(`📋 Found ${batchUsernames.length} users in batch ${batchIndex + 1}`);
     
     try {
-        // Wait for modal to be ready
-        await waitForElement('div[role="dialog"]', 5000);
-        
-        let attempts = 0;
-        let maxAttempts = 20;
-        
-        let processedUsernames = new Set(); // Track processed usernames to avoid infinite loops
-        let consecutiveSkips = 0; // Track consecutive skips to detect when we're stuck
-        
-        while (unfollowed < count && attempts < maxAttempts) {
-            const followingButtons = findFollowingButtons();
+        // Process each username in the batch directly
+        for (let i = 0; i < Math.min(count, batchUsernames.length); i++) {
+            const username = batchUsernames[i];
             
-            if (followingButtons.length === 0) {
-                updateStatus(`📜 Scrolling to find more users...`);
-                scrollModal();
-                await sleep(2000);
-                attempts++;
-                continue;
-            }
+            if (!username) continue;
             
-            let foundBatchUser = false; // Track if we found any user from the batch on this page
+            updateStatus(`🎯 Navigating to @${username} (${unfollowed + 1}/${count})`);
             
-            // Process visible following buttons
-            for (let button of followingButtons) {
-                if (unfollowed >= count) break;
+            // Navigate directly to the user's profile
+            const profileUrl = `https://www.instagram.com/${username}/`;
+            window.location.href = profileUrl;
+            
+            // Wait for page to load
+            await sleep(3000);
+            
+            // Wait for profile page to be ready
+            await waitForElement('main', 10000);
+            
+            // Look for the follow button on their profile
+            const followButton = findFollowButtonOnProfile();
+            
+            if (followButton) {
+                updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count})`);
                 
-                try {
-                    // Get username
-                    const username = getUsernameFromButton(button);
+                // Random delay before clicking
+                const delay = getRandomDelay();
+                updateStatus(`⏳ Waiting ${delay.toFixed(1)}s before unfollowing @${username}...`);
+                await sleep(delay * 1000);
+                
+                // Click the follow button
+                followButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                await sleep(500);
+                followButton.click();
+                
+                // Wait for and click unfollow confirmation
+                await sleep(1000);
+                const unfollowBtn = findUnfollowButton();
+                if (unfollowBtn) {
+                    unfollowBtn.click();
+                    unfollowed++;
                     
-                    if (username) {
-                        // Skip if we've already processed this username on this page
-                        if (processedUsernames.has(username)) {
-                            continue;
-                        }
-                        
-                        processedUsernames.add(username);
-                        
-                        // Check if username is in the selected batch
-                        if (batchUsernames.includes(username)) {
-                            foundBatchUser = true;
-                            consecutiveSkips = 0; // Reset skip counter
-                            
-                            updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count}) - from batch ${batchIndex + 1}`);
-                            
-                            // Random delay before clicking
-                            const delay = getRandomDelay();
-                            updateStatus(`⏳ Waiting ${delay.toFixed(1)}s before unfollowing @${username}...`);
-                            await sleep(delay * 1000);
-                            
-                            // Click following button
-                            button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            await sleep(500);
-                            button.click();
-                            
-                            // Wait for and click unfollow confirmation
-                            await sleep(1000);
-                            const unfollowBtn = findUnfollowButton();
-                            if (unfollowBtn) {
-                                unfollowBtn.click();
-                            }
-                            
-                            unfollowed++;
-                            
-                            // Remove from batch
-                            const index = batchUsernames.indexOf(username);
-                            if (index > -1) {
-                                batchUsernames.splice(index, 1);
-                                saveFollowedBatches();
-                                console.log('📋 Removed', username, 'from batch', batchIndex + 1);
-                            }
-                            
-                            updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${count})`);
-                            
-                            // Random delay between unfollows
-                            const nextDelay = getRandomDelay();
-                            updateStatus(`⏳ Waiting ${nextDelay.toFixed(1)}s before next unfollow...`);
-                            await sleep(nextDelay * 1000);
-                        } else {
-                            consecutiveSkips++;
-                            updateStatus(`⚠️ Skipping @${username} - not in batch ${batchIndex + 1} (skip ${consecutiveSkips})`);
-                        }
+                    // Remove from batch
+                    const index = batch.usernames.indexOf(username);
+                    if (index > -1) {
+                        batch.usernames.splice(index, 1);
+                        saveFollowedBatches();
+                        console.log('📋 Removed', username, 'from batch', batchIndex + 1);
                     }
-                } catch (error) {
-                    console.log('Error unfollowing user:', error);
-                }
-            }
-            
-            // Clear processed usernames for next page
-            processedUsernames.clear();
-            
-            // Check if we're stuck (no batch users found on this page)
-            if (!foundBatchUser) {
-                updateStatus(`📜 No batch users found on current page, scrolling...`);
-                scrollModal();
-                await sleep(2000);
-                attempts++;
-                
-                // If we've skipped too many consecutive users, we might be stuck
-                if (consecutiveSkips > 50) {
-                    updateStatus(`⚠️ Too many consecutive skips (${consecutiveSkips}), stopping to avoid infinite loop`);
-                    break;
+                    
+                    updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${count})`);
+                    
+                    // Random delay between unfollows
+                    const nextDelay = getRandomDelay();
+                    updateStatus(`⏳ Waiting ${nextDelay.toFixed(1)}s before next user...`);
+                    await sleep(nextDelay * 1000);
+                } else {
+                    updateStatus(`⚠️ Could not find unfollow confirmation for @${username}`);
                 }
             } else {
-                // Reset attempts if we found batch users
-                attempts = 0;
+                updateStatus(`⚠️ Could not find follow button for @${username} - may not be following them`);
             }
         }
         
         // Remove empty batch
-        if (batchUsernames.length === 0) {
+        if (batch.usernames.length === 0) {
             followedBatches.splice(batchIndex, 1);
             saveFollowedBatches();
             updateStatus(`🗑️ Removed empty batch ${batchIndex + 1}`);
@@ -668,6 +622,49 @@ function findUnfollowButton() {
         const buttonText = button.textContent.toLowerCase();
         return buttonText.includes('unfollow');
     });
+}
+
+// Find follow button on a user's profile page
+function findFollowButtonOnProfile() {
+    console.log('🔍 Looking for follow button on profile page...');
+    
+    // Method 1: Look for buttons with "Following" text (indicating we're following them)
+    const buttons = document.querySelectorAll('button');
+    const followingButtons = Array.from(buttons).filter(button => {
+        const buttonText = button.textContent.toLowerCase().trim();
+        console.log('🔍 Button text:', buttonText);
+        
+        // Check for "Following" (indicating we're following them)
+        return buttonText === 'following' || 
+               buttonText.includes('following');
+    });
+    
+    console.log('✅ Found following buttons on profile:', followingButtons.length);
+    
+    // Method 2: Look for buttons with specific Instagram structure
+    if (followingButtons.length === 0) {
+        console.log('🔍 Trying alternative following button detection...');
+        const allButtons = document.querySelectorAll('button');
+        const alternativeButtons = Array.from(allButtons).filter(button => {
+            // Look for buttons with div containing "Following"
+            const divs = button.querySelectorAll('div');
+            for (let div of divs) {
+                const divText = div.textContent.toLowerCase().trim();
+                if (divText === 'following') {
+                    console.log('✅ Found following button via div structure');
+                    return true;
+                }
+            }
+            return false;
+        });
+        
+        if (alternativeButtons.length > 0) {
+            console.log('✅ Found following buttons via alternative method:', alternativeButtons.length);
+            return alternativeButtons[0]; // Return the first one
+        }
+    }
+    
+    return followingButtons.length > 0 ? followingButtons[0] : null;
 }
 
 // Get username from a follow/following button
