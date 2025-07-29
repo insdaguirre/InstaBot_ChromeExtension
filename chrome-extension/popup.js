@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const startFollowBtn = document.getElementById('startFollow');
     const startUnfollowBtn = document.getElementById('startUnfollow');
     const followCountInput = document.getElementById('followCount');
-    const unfollowCountInput = document.getElementById('unfollowCount');
     const batchesListDiv = document.getElementById('batchesList');
     const batchSelect = document.getElementById('batchSelect');
 
@@ -125,13 +124,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Start unfollowing users
     startUnfollowBtn.addEventListener('click', function() {
-        const count = parseInt(unfollowCountInput.value);
         const batchIndex = parseInt(batchSelect.value);
-        
-        if (!count || count < 1 || count > 50) {
-            updateStatus("❌ Please enter a number between 1 and 50");
-            return;
-        }
         
         if (batchIndex === undefined || batchIndex < 0) {
             updateStatus("❌ Please select a batch to unfollow from");
@@ -139,13 +132,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         startUnfollowBtn.disabled = true;
-        updateStatus(`🚀 Starting to unfollow ${count} users from batch ${batchIndex + 1}...`);
+        updateStatus(`🚀 Starting to unfollow entire batch ${batchIndex + 1}...`);
 
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
             chrome.tabs.sendMessage(tabs[0].id, {
                 action: 'unfollowBatch',
                 batchIndex: batchIndex,
-                count: count
+                count: -1 // -1 indicates unfollow entire batch
             }, function(response) {
                 if (response) {
                     updateStatus(response.message);

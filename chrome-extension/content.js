@@ -533,7 +533,8 @@ async function startUnfollowingBatch(batchIndex, count) {
         await waitForElement('div[role="dialog"]', 5000);
         
         // Process each username in the batch
-        for (let i = 0; i < Math.min(count, batchUsernames.length); i++) {
+        const maxUsers = count === -1 ? batchUsernames.length : Math.min(count, batchUsernames.length);
+        for (let i = 0; i < maxUsers; i++) {
             const username = batchUsernames[i];
             
             if (!username) continue;
