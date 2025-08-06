@@ -13,9 +13,27 @@ chrome.storage.local.get(['followedBatches'], function(result) {
 
 // Save followed batches to storage
 function saveFollowedBatches() {
+    // Clean up empty batches before saving
+    followedBatches = followedBatches.filter(batch => batch.usernames.length > 0);
+    
     chrome.storage.local.set({followedBatches: followedBatches}, function() {
         console.log('💾 Saved', followedBatches.length, 'followed batches to storage');
     });
+}
+
+// Clean up empty batches
+function cleanupEmptyBatches() {
+    const originalCount = followedBatches.length;
+    followedBatches = followedBatches.filter(batch => batch.usernames.length > 0);
+    const removedCount = originalCount - followedBatches.length;
+    
+    if (removedCount > 0) {
+        saveFollowedBatches();
+        console.log(`🗑️ Cleaned up ${removedCount} empty batches`);
+        updateStatus(`🗑️ Cleaned up ${removedCount} empty batches`);
+    }
+    
+    return removedCount;
 }
 
 // Get all usernames from all batches
@@ -56,6 +74,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         followedBatches = [];
         saveFollowedBatches();
         sendResponse({message: "🗑️ Cleared all followed batches"});
+    } else if (request.action === 'cleanupEmptyBatches') {
+        const removedCount = cleanupEmptyBatches();
+        sendResponse({message: `🗑️ Cleaned up ${removedCount} empty batches`});
     } else if (request.action === 'unfollowBatch') {
         if (!isRunning) {
             startUnfollowingBatch(request.batchIndex, request.count).then(result => {
@@ -539,7 +560,7 @@ async function startUnfollowingBatch(batchIndex, count) {
             
             if (!username) continue;
             
-            updateStatus(`🔍 Searching for @${username} (${unfollowed + 1}/${count})`);
+            updateStatus(`🔍 Searching for @${username} (${unfollowed + 1}/${maxUsers})`);
             
             // Find and use the search input
             const searchInput = findSearchInput();
@@ -572,7 +593,7 @@ async function startUnfollowingBatch(batchIndex, count) {
                 updateStatus(`⏳ Waiting ${searchToClickDelay.toFixed(1)}s between search and unfollow...`);
                 await sleep(searchToClickDelay * 1000);
                 
-                updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count})`);
+                updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${maxUsers})`);
                 
                 // Random delay before clicking follow button
                 const clickDelay = getRandomDelay();
@@ -595,11 +616,20 @@ async function startUnfollowingBatch(batchIndex, count) {
                     const index = batch.usernames.indexOf(username);
                     if (index > -1) {
                         batch.usernames.splice(index, 1);
-                        saveFollowedBatches();
                         console.log('📋 Removed', username, 'from batch', batchIndex + 1);
+                        updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${maxUsers})`);
+                        
+                        // Check if batch is now empty and remove it
+                        if (batch.usernames.length === 0) {
+                            followedBatches.splice(batchIndex, 1);
+                            saveFollowedBatches();
+                            updateStatus(`🗑️ Auto-deleted empty batch ${batchIndex + 1}`);
+                            console.log('🗑️ Auto-deleted empty batch', batchIndex + 1);
+                        } else {
+                            // Save the updated batch
+                            saveFollowedBatches();
+                        }
                     }
-                    
-                    updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${count})`);
                     
                     // Random delay between unfollows
                     const nextDelay = getRandomDelay();
@@ -618,11 +648,12 @@ async function startUnfollowingBatch(batchIndex, count) {
             await sleep(1000);
         }
         
-        // Remove empty batch
-        if (batch.usernames.length === 0) {
-            followedBatches.splice(batchIndex, 1);
+        // Final check for empty batches after processing all users
+        const remainingBatches = followedBatches.filter(batch => batch.usernames.length > 0);
+        if (remainingBatches.length !== followedBatches.length) {
+            followedBatches = remainingBatches;
             saveFollowedBatches();
-            updateStatus(`🗑️ Removed empty batch ${batchIndex + 1}`);
+            updateStatus(`🗑️ Cleaned up empty batches - ${followedBatches.length} batches remaining`);
         }
         
         // Handle the case where count is -1 (unfollow entire batch)
@@ -921,6 +952,52 @@ function testUrlDetection() {
 
 // Make test function available globally
 window.testUrlDetection = testUrlDetection; 
+
+// Test function for auto-deletion functionality
+function testAutoDeletion() {
+    console.log('🧪 === TESTING AUTO-DELETION ===');
+    
+    // Create test batches
+    const testBatches = [
+        {
+            timestamp: new Date().toISOString(),
+            count: 3,
+            usernames: ['user1', 'user2', 'user3']
+        },
+        {
+            timestamp: new Date().toISOString(),
+            count: 2,
+            usernames: ['user4', 'user5']
+        },
+        {
+            timestamp: new Date().toISOString(),
+            count: 1,
+            usernames: ['user6']
+        }
+    ];
+    
+    console.log('Original batches:', testBatches.length);
+    
+    // Simulate removing users from batches
+    testBatches[0].usernames = []; // Empty first batch
+    testBatches[1].usernames = ['user4']; // Remove one user from second batch
+    testBatches[2].usernames = []; // Empty third batch
+    
+    console.log('After removing users:');
+    testBatches.forEach((batch, index) => {
+        console.log(`Batch ${index + 1}: ${batch.usernames.length} users remaining`);
+    });
+    
+    // Test cleanup function
+    const remainingBatches = testBatches.filter(batch => batch.usernames.length > 0);
+    console.log('After cleanup:', remainingBatches.length, 'batches remaining');
+    
+    console.log('🧪 === END TEST ===');
+    return remainingBatches;
+}
+
+// Make test function available globally
+window.testAutoDeletion = testAutoDeletion;
 
 // Test function for comprehensive page detection debugging
 function testPageDetection() {

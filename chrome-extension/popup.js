@@ -37,10 +37,19 @@ document.addEventListener('DOMContentLoaded', function() {
         if (batchesListDiv) {
             if (batches && batches.length > 0) {
                 let totalUsers = 0;
+                let emptyBatches = 0;
                 batches.forEach(batch => {
                     totalUsers += batch.count;
+                    if (batch.usernames && batch.usernames.length === 0) {
+                        emptyBatches++;
+                    }
                 });
-                batchesListDiv.textContent = `📋 ${batches.length} batches, ${totalUsers} total users`;
+                
+                let statusText = `📋 ${batches.length} batches, ${totalUsers} total users`;
+                if (emptyBatches > 0) {
+                    statusText += ` (${emptyBatches} empty)`;
+                }
+                batchesListDiv.textContent = statusText;
             } else {
                 batchesListDiv.textContent = `📋 No batches yet`;
             }
@@ -55,7 +64,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const timeStr = date.toLocaleString();
                     const option = document.createElement('option');
                     option.value = index;
-                    option.textContent = `Batch ${index + 1}: ${batch.count} users (${timeStr})`;
+                    
+                    // Show if batch is empty
+                    const isEmpty = batch.usernames && batch.usernames.length === 0;
+                    const status = isEmpty ? ' (EMPTY)' : '';
+                    
+                    option.textContent = `Batch ${index + 1}: ${batch.count} users${status} (${timeStr})`;
                     batchSelect.appendChild(option);
                 });
             } else {
@@ -163,6 +177,26 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (response) {
                         updateStatus(response.message);
                         updateBatchesList([]);
+                    }
+                });
+            });
+        });
+    }
+
+    // Cleanup empty batches button
+    const cleanupBatchesBtn = document.getElementById('cleanupBatches');
+    if (cleanupBatchesBtn) {
+        cleanupBatchesBtn.addEventListener('click', function() {
+            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                chrome.tabs.sendMessage(tabs[0].id, {action: 'cleanupEmptyBatches'}, function(response) {
+                    if (response) {
+                        updateStatus(response.message);
+                        // Update batches list after cleanup
+                        chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedBatches'}, function(batchesResponse) {
+                            if (batchesResponse) {
+                                updateBatchesList(batchesResponse.batches);
+                            }
+                        });
                     }
                 });
             });
