@@ -58,6 +58,12 @@ function extractUsernameFromUrl(url) {
     return match ? match[1] : 'unknown';
 }
 
+// Add randomization helper function at the top
+function randomDelay(min, max) {
+    const delay = Math.random() * (max - min) + min;
+    return new Promise(resolve => setTimeout(resolve, delay));
+}
+
 // Start following users
 async function startFollowing(count) {
     isRunning = true;
@@ -81,7 +87,7 @@ async function startFollowing(count) {
             
             if (!modal) {
                 // Wait a bit more and try again
-                await sleep(2000);
+                await sleep(2000, true);
                 modal = document.querySelector('div[role="dialog"]') || 
                        document.querySelector('[data-testid="modal"]') ||
                        document.querySelector('.modal') ||
@@ -110,7 +116,7 @@ async function startFollowing(count) {
             if (followButtons.length === 0) {
                 updateStatus(`📜 Scrolling to find more users...`);
                 scrollModal(modal);
-                await sleep(2000);
+                await sleep(2000, true);
                 attempts++;
                 continue;
             }
@@ -139,11 +145,11 @@ async function startFollowing(count) {
                     
                     // Click follow button
                     button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    await sleep(500);
+                    await sleep(500, true);
                     button.click();
                     
                     // Wait a moment and first check the clicked button itself
-                    await sleep(1200);
+                    await sleep(1200, true);
                     let newText = (getButtonText(button) || '').toLowerCase();
                     
                     // If not changed yet, retry a few times and optionally search nearby
@@ -159,7 +165,7 @@ async function startFollowing(count) {
                                     updatedButton = btn; break;
                                 }
                             }
-                            if (!updatedButton) { await sleep(400); buttonAttempts++; }
+                            if (!updatedButton) { await sleep(400, true); buttonAttempts++; }
                         }
                         if (updatedButton) newText = (getButtonText(updatedButton) || '').toLowerCase();
                     }
@@ -172,10 +178,10 @@ async function startFollowing(count) {
                         // Private account - unfollow it
                         updateStatus(`⚠️ @${displayName} is private, unfollowing...`);
                         
-                        await sleep(800);
+                        await sleep(800, true);
                         // Click again to open confirm, then find Unfollow
                         button.click();
-                        await sleep(800);
+                        await sleep(800, true);
                         let unfollowBtn = null;
                         const allButtons = document.querySelectorAll('button');
                         for (let btn of allButtons) {
@@ -194,7 +200,7 @@ async function startFollowing(count) {
                         }
                         if (unfollowBtn) {
                             unfollowBtn.click();
-                            await sleep(400);
+                            await sleep(400, true);
                             updateStatus(`🔄 Unfollowed @${displayName} (private account)`);
                         } else {
                             updateStatus(`❌ Could not find unfollow confirmation for @${displayName}`);
@@ -203,8 +209,10 @@ async function startFollowing(count) {
                         updateStatus(`❓ Button state unchanged for @${displayName}. Skipping.`);
                     }
                     
-                    // Wait between follows
-                    await sleep(700);
+                    // Wait between follows with additional randomization
+                    await sleep(700, true);
+                    // Add extra random delay to make pattern less predictable
+                    await randomDelay(200, 800);
                 } catch (error) {
                     console.log('Error following user:', error);
                 }
@@ -213,7 +221,7 @@ async function startFollowing(count) {
             // Scroll to load more users if needed
             if (followed < count) {
                 scrollModal(modal);
-                await sleep(2000);
+                await sleep(2000, true);
             }
             
             attempts++;
@@ -255,7 +263,7 @@ async function startUnfollowing(count) {
             if (followingButtons.length === 0) {
                 updateStatus(`📜 Scrolling to find more users...`);
                 scrollModal();
-                await sleep(2000);
+                await sleep(2000, true);
                 attempts++;
                 continue;
             }
@@ -273,11 +281,11 @@ async function startUnfollowing(count) {
                         
                         // Click following button
                         button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        await sleep(500);
+                        await sleep(500, true);
                         button.click();
                         
                         // Wait for and click unfollow confirmation
-                        await sleep(1000);
+                        await sleep(1000, true);
                         const unfollowBtn = document.querySelector('button:contains("Unfollow")');
                         if (unfollowBtn) {
                             unfollowBtn.click();
@@ -286,8 +294,10 @@ async function startUnfollowing(count) {
                         unfollowed++;
                         updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${count})`);
                         
-                        // Wait between unfollows
-                        await sleep(1000);
+                        // Wait between unfollows with additional randomization
+                        await sleep(1000, true);
+                        // Add extra random delay to make pattern less predictable
+                        await randomDelay(300, 1000);
                     }
                 } catch (error) {
                     console.log('Error unfollowing user:', error);
@@ -297,7 +307,7 @@ async function startUnfollowing(count) {
             // Scroll to load more users if needed
             if (unfollowed < count) {
                 scrollModal();
-                await sleep(2000);
+                await sleep(2000, true);
             }
             
             attempts++;
@@ -472,9 +482,19 @@ function waitForElement(selector, timeout = 5000) {
     });
 }
 
-// Sleep function
-function sleep(ms) {
+// Sleep function with optional randomization
+function sleep(ms, randomize = false, minMultiplier = 0.8, maxMultiplier = 1.5) {
+    if (randomize) {
+        const multiplier = Math.random() * (maxMultiplier - minMultiplier) + minMultiplier;
+        ms = Math.round(ms * multiplier);
+    }
     return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Random delay helper function
+function randomDelay(min, max) {
+    const delay = Math.random() * (max - min) + min;
+    return new Promise(resolve => setTimeout(resolve, delay));
 }
 
 // Send status update to popup
@@ -526,7 +546,7 @@ function detectButtonStateChange(originalButton, userRow, originalText) {
             
             if (!updatedButton) {
                 // Wait a bit more and try again
-                await sleep(300);
+                await sleep(300, true);
                 detectionAttempts++;
             }
         }

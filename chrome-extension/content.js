@@ -3,6 +3,21 @@
 let isRunning = false;
 let followedBatches = []; // Store batches of followed users with timestamps
 
+// Add randomization helper functions at the top
+function randomDelay(min, max) {
+    const delay = Math.random() * (max - min) + min;
+    return new Promise(resolve => setTimeout(resolve, delay));
+}
+
+// Enhanced sleep function with randomization
+function sleep(ms, randomize = false, minMultiplier = 0.8, maxMultiplier = 1.5) {
+    if (randomize) {
+        const multiplier = Math.random() * (maxMultiplier - minMultiplier) + minMultiplier;
+        ms = Math.round(ms * multiplier);
+    }
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 // Load followed batches from storage
 chrome.storage.local.get(['followedBatches'], function(result) {
     if (result.followedBatches) {
@@ -277,7 +292,7 @@ async function startFollowing(count) {
             if (followButtons.length === 0) {
                 updateStatus(`📜 Scrolling to find more users...`);
                 scrollModal();
-                await sleep(2000);
+                await sleep(2000, true);
                 attempts++;
                 continue;
             }
@@ -309,11 +324,11 @@ async function startFollowing(count) {
                         
                         // Click follow button
                         button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        await sleep(500);
+                        await sleep(500, true);
                         button.click();
                         
                         // Wait longer for Instagram's UI to update and stabilize
-                        await sleep(2000);
+                        await sleep(2000, true);
                         
                         // Find the updated button by looking in the same user row
                         let updatedButton = null;
@@ -334,7 +349,7 @@ async function startFollowing(count) {
                             
                             if (!updatedButton) {
                                 // Wait a bit more and try again
-                                await sleep(500);
+                                await sleep(500, true);
                                 attempts++;
                             }
                         }
@@ -359,16 +374,20 @@ async function startFollowing(count) {
                             }
                             
                             updateStatus(`✅ Followed @${username} (public account) (${followed}/${count})`);
+                            
+                            // Add random delay between users for more human-like behavior
+                            const userDelay = getRandomDelay();
+                            await sleep(userDelay * 1000);
                         } else if (newText.toLowerCase().includes("requested")) {
                             // Private account - unfollow it
                             updateStatus(`⚠️ @${username} is private, unfollowing...`);
                             
                             // Wait for the button to fully stabilize
-                            await sleep(1500);
+                            await sleep(1500, true);
                             
                             // Click the button again to unfollow
                             updatedButton.click();
-                            await sleep(1500);
+                            await sleep(1500, true);
                             
                             // Look for unfollow confirmation button with multiple methods
                             let unfollowBtn = null;
