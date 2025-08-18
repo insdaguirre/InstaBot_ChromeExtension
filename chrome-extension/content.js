@@ -350,8 +350,8 @@ async function startFollowing(count) {
                         
                         if (newText.toLowerCase().includes("following")) {
                             // Public account - successfully followed
-                            followed++;
-                            
+                        followed++;
+                        
                             // Add to current batch only if successfully followed
                             if (!currentBatchUsernames.includes(username)) {
                                 currentBatchUsernames.push(username);

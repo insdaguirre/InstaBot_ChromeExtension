@@ -67,24 +67,49 @@ async function startFollowing(count) {
     updateStatus(`🎯 Looking for follow buttons...`);
     
     try {
-        // Wait for modal to be ready
-        await waitForElement('div[role="dialog"]', 5000);
+        // Wait for modal to be ready - try multiple selectors
+        let modal = null;
+        try {
+            modal = await waitForElement('div[role="dialog"]', 3000);
+        } catch (e) {
+            // Try alternative modal selectors
+            modal = document.querySelector('div[role="dialog"]') || 
+                   document.querySelector('[data-testid="modal"]') ||
+                   document.querySelector('.modal') ||
+                   document.querySelector('[class*="modal"]') ||
+                   document.querySelector('[class*="dialog"]');
+            
+            if (!modal) {
+                // Wait a bit more and try again
+                await sleep(2000);
+                modal = document.querySelector('div[role="dialog"]') || 
+                       document.querySelector('[data-testid="modal"]') ||
+                       document.querySelector('.modal') ||
+                       document.querySelector('[class*="modal"]') ||
+                       document.querySelector('[class*="dialog"]');
+            }
+        }
+        
+        if (!modal) {
+            throw new Error('Could not find Instagram modal - make sure you are on a followers/following page');
+        }
         
         let attempts = 0;
         let maxAttempts = 20;
         
         while (followed < count && attempts < maxAttempts) {
-            // Only look for buttons that say "Follow" (not "Following" or "Requested")
-            // Use a more robust selector that handles different button structures
-            let followButtons = document.querySelectorAll('button');
-            followButtons = Array.from(followButtons).filter(button => {
-                const text = button.textContent.trim();
-                return text.includes('Follow') && !text.includes('Following') && !text.includes('Requested');
+            // Find visible Follow buttons in the modal (exclude Following/Requested)
+            const buttonsInModal = Array.from(modal.querySelectorAll('button'));
+            let followButtons = buttonsInModal.filter(button => {
+                const text = (getButtonText(button) || '').toLowerCase();
+                return text.includes('follow') && !text.includes('following') && !text.includes('requested');
             });
+            
+            updateStatus(`🔍 Found ${followButtons.length} follow buttons (attempt ${attempts + 1}/${maxAttempts})`);
             
             if (followButtons.length === 0) {
                 updateStatus(`📜 Scrolling to find more users...`);
-                scrollModal();
+                scrollModal(modal);
                 await sleep(2000);
                 attempts++;
                 continue;
@@ -95,134 +120,99 @@ async function startFollowing(count) {
                 if (followed >= count) break;
                 
                 try {
-                    // Get username
-                    const username = getUsernameFromButton(button);
+                    // Get username (optional)
+                    let username = getUsernameFromButton(button, modal);
+                    const displayName = username || 'unknown';
                     
-                    if (username) {
-                        updateStatus(`⏳ Following @${username} (${followed + 1}/${count})`);
-                        
-                        // Store original button text and find the user row for reliable button tracking
-                        const originalText = button.textContent.trim();
-                        const userRow = button.closest('div[role="dialog"] div');
-                        
-                        if (!userRow) {
-                            updateStatus(`⚠️ Could not find user row for @${username}, skipping...`);
-                            continue;
-                        }
-                        
-                        // Click follow button
-                        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        await sleep(500);
-                        button.click();
-                        
-                        // Wait longer for Instagram's UI to update and stabilize
-                        await sleep(2000);
-                        
-                        // Find the updated button by looking in the same user row
-                        let updatedButton = null;
-                        let attempts = 0;
-                        const maxAttempts = 5;
-                        
-                        while (!updatedButton && attempts < maxAttempts) {
-                            // Look for the button in the same user row
-                            const buttons = userRow.querySelectorAll('button');
-                            for (let btn of buttons) {
-                                const btnText = btn.textContent.trim();
-                                // Check if this button has changed from the original state
-                                if (btnText !== originalText && (btnText.includes('Following') || btnText.includes('Requested'))) {
-                                    updatedButton = btn;
-                                    break;
-                                }
-                            }
-                            
-                            if (!updatedButton) {
-                                // Wait a bit more and try again
-                                await sleep(500);
-                                attempts++;
-                            }
-                        }
-                        
-                        if (!updatedButton) {
-                            updateStatus(`❓ Could not detect button state change for @${username}, skipping...`);
-                            continue;
-                        }
-                        
-                        const newText = updatedButton.textContent.trim();
-                        
-                        console.log(`Button state change for @${username}: "${originalText}" -> "${newText}"`);
-                        
-                        if (newText.includes("Following")) {
-                            // Public account - successfully followed
-                            followed++;
-                            updateStatus(`✅ Followed @${username} (public account) (${followed}/${count})`);
-                        } else if (newText.includes("Requested")) {
-                            // Private account - unfollow it
-                            updateStatus(`⚠️ @${username} is private, unfollowing...`);
-                            
-                            // Wait for the button to fully stabilize
-                            await sleep(1500);
-                            
-                            // Click the button again to unfollow
-                            updatedButton.click();
-                            await sleep(1500);
-                            
-                            // Look for unfollow confirmation button with multiple methods
-                            let unfollowBtn = null;
-                            
-                            // Method 1: Look for button with "Unfollow" text
-                            unfollowBtn = document.querySelector('button:contains("Unfollow")');
-                            
-                            // Method 2: Look for button with specific Instagram structure
-                            if (!unfollowBtn) {
-                                const allButtons = document.querySelectorAll('button');
-                                for (let btn of allButtons) {
-                                    if (btn.textContent.trim().includes('Unfollow')) {
-                                        unfollowBtn = btn;
-                                        break;
-                                    }
-                                }
-                            }
-                            
-                            // Method 3: Look for button in the confirmation dialog
-                            if (!unfollowBtn) {
-                                const dialogs = document.querySelectorAll('div[role="dialog"]');
-                                for (let dialog of dialogs) {
-                                    const btn = dialog.querySelector('button');
-                                    if (btn && btn.textContent.trim().includes('Unfollow')) {
-                                        unfollowBtn = btn;
-                                        break;
-                                    }
-                                }
-                            }
-                            
-                            if (unfollowBtn) {
-                                unfollowBtn.click();
-                                await sleep(1000);
-                                privateAccountsUnfollowed++;
-                                updateStatus(`🔄 Unfollowed @${username} (private account) - ${privateAccountsUnfollowed} private accounts removed`);
-                            } else {
-                                updateStatus(`❌ Could not find unfollow confirmation for @${username}, may need manual intervention`);
-                                console.log('Unfollow button not found, available buttons:', 
-                                    Array.from(document.querySelectorAll('button')).map(b => b.textContent.trim()));
-                            }
-                        } else {
-                            // Button didn't change as expected, might be an error
-                            updateStatus(`❓ Unexpected button state for @${username}: "${newText}" (expected "Following" or "Requested")`);
-                            console.log(`Unexpected button state: "${newText}" for @${username}`);
-                        }
-                        
-                        // Wait between follows
-                        await sleep(1000);
+                    updateStatus(`⏳ Following @${displayName} (${followed + 1}/${count})`);
+                    
+                    // Store original button text and find the user row for reliable button tracking
+                    const originalText = (getButtonText(button) || '').toLowerCase();
+                    const userRow = button.closest('div[role="dialog"] div') || 
+                                  button.closest('li') ||
+                                  button.closest('div') || 
+                                  button.parentElement;
+                    
+                    if (!userRow) {
+                        updateStatus(`⚠️ Could not find user row for @${displayName}, proceeding anyway...`);
                     }
+                    
+                    // Click follow button
+                    button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    await sleep(500);
+                    button.click();
+                    
+                    // Wait a moment and first check the clicked button itself
+                    await sleep(1200);
+                    let newText = (getButtonText(button) || '').toLowerCase();
+                    
+                    // If not changed yet, retry a few times and optionally search nearby
+                    if (!(newText.includes('following') || newText.includes('requested'))) {
+                        let updatedButton = null;
+                        let buttonAttempts = 0;
+                        const maxButtonAttempts = 4;
+                        while (!updatedButton && buttonAttempts < maxButtonAttempts) {
+                            const buttons = (userRow || modal).querySelectorAll('button');
+                            for (let btn of buttons) {
+                                const t = (getButtonText(btn) || '').toLowerCase();
+                                if (t !== originalText && (t.includes('following') || t.includes('requested'))) {
+                                    updatedButton = btn; break;
+                                }
+                            }
+                            if (!updatedButton) { await sleep(400); buttonAttempts++; }
+                        }
+                        if (updatedButton) newText = (getButtonText(updatedButton) || '').toLowerCase();
+                    }
+                    
+                    if (newText.includes('following')) {
+                        // Public account - successfully followed
+                        followed++;
+                        updateStatus(`✅ Followed @${displayName} (public account) (${followed}/${count})`);
+                    } else if (newText.includes('requested')) {
+                        // Private account - unfollow it
+                        updateStatus(`⚠️ @${displayName} is private, unfollowing...`);
+                        
+                        await sleep(800);
+                        // Click again to open confirm, then find Unfollow
+                        button.click();
+                        await sleep(800);
+                        let unfollowBtn = null;
+                        const allButtons = document.querySelectorAll('button');
+                        for (let btn of allButtons) {
+                            const t = (getButtonText(btn) || '').toLowerCase();
+                            if (t.includes('unfollow')) { unfollowBtn = btn; break; }
+                        }
+                        if (!unfollowBtn) {
+                            const dialogs = document.querySelectorAll('div[role="dialog"]');
+                            for (let d of dialogs) {
+                                for (let b of d.querySelectorAll('button')) {
+                                    const t = (getButtonText(b) || '').toLowerCase();
+                                    if (t.includes('unfollow')) { unfollowBtn = b; break; }
+                                }
+                                if (unfollowBtn) break;
+                            }
+                        }
+                        if (unfollowBtn) {
+                            unfollowBtn.click();
+                            await sleep(400);
+                            updateStatus(`🔄 Unfollowed @${displayName} (private account)`);
+                        } else {
+                            updateStatus(`❌ Could not find unfollow confirmation for @${displayName}`);
+                        }
+                    } else {
+                        updateStatus(`❓ Button state unchanged for @${displayName}. Skipping.`);
+                    }
+                    
+                    // Wait between follows
+                    await sleep(700);
                 } catch (error) {
                     console.log('Error following user:', error);
-                    updateStatus(`❌ Error following user: ${error.message}`);
                 }
             }
             
             // Scroll to load more users if needed
             if (followed < count) {
-                scrollModal();
+                scrollModal(modal);
                 await sleep(2000);
             }
             
@@ -330,23 +320,123 @@ async function startUnfollowing(count) {
 }
 
 // Get username from a follow/following button
-function getUsernameFromButton(button) {
+function getUsernameFromButton(button, modalElement = null) {
     try {
-        const userContainer = button.closest('div[role="dialog"] div').querySelector('a[href*="/"]');
-        if (userContainer) {
-            const href = userContainer.href;
-            const match = href.match(/instagram\.com\/([^\/\?]+)/);
-            return match ? match[1] : null;
+        const modal = modalElement || document.querySelector('div[role="dialog"]');
+        // Row that contains avatar, name and the button
+        let row = button.closest('div[role="dialog"] li') || button.closest('li') || button.closest('div');
+
+        const reserved = new Set(['p','reel','reels','stories','explore','accounts','direct','about','privacy','terms','developers','directory','web','ajax','i','s','emails','challenge','following','followers']);
+        const isValidUser = (name) => /^[a-z0-9._]{1,30}$/i.test(name) && !reserved.has(name.toLowerCase());
+
+        const extractFromAnchors = (root) => {
+            const anchors = Array.from(root.querySelectorAll('a[href]'));
+            for (const a of anchors) {
+                let href = a.getAttribute('href') || '';
+                if (!href) continue;
+                if (!href.startsWith('http')) {
+                    if (!href.startsWith('/')) href = '/' + href;
+                }
+                try {
+                    const u = href.startsWith('http') ? new URL(href) : new URL(href, window.location.origin);
+                    const path = u.pathname.replace(/^\/+|\/+$/g, '');
+                    if (!path) continue;
+                    const parts = path.split('/');
+                    if (parts.length !== 1) continue; // only plain profile paths
+                    const candidate = parts[0];
+                    if (isValidUser(candidate)) return candidate.toLowerCase();
+                } catch (_) { /* ignore malformed */ }
+            }
+            return null;
+        };
+
+        const extractFromSpans = (root) => {
+            // 1) Exact class stack you provided
+            let span = root.querySelector('span._ap3a._aaco._aacw._aacx._aad7._aade');
+            if (span) {
+                const txt = (span.textContent || '').trim();
+                if (isValidUser(txt)) return txt.toLowerCase();
+            }
+            // 2) Any span with _ap3a and username-looking text
+            const spans = Array.from(root.querySelectorAll('span._ap3a'));
+            for (const s of spans) {
+                const txt = (s.textContent || '').trim();
+                if (isValidUser(txt)) return txt.toLowerCase();
+            }
+            return null;
+        };
+
+        // 1) Try within the row first (anchors then spans)
+        if (row) {
+            let found = extractFromAnchors(row);
+            if (found) return found;
+            found = extractFromSpans(row);
+            if (found) return found;
         }
+        // 2) Try within the modal as fallback
+        if (modal) {
+            let found = extractFromAnchors(modal);
+            if (found) return found;
+            found = extractFromSpans(modal);
+            if (found) return found;
+        }
+        // 3) Walk up a few parents and try again
+        let parent = button.parentElement;
+        for (let i = 0; i < 4 && parent; i++) {
+            let found = extractFromAnchors(parent);
+            if (found) return found;
+            found = extractFromSpans(parent);
+            if (found) return found;
+            parent = parent.parentElement;
+        }
+        // 4) Geometric fallback: pick nearest visible profile anchor to the button
+        const targetRect = button.getBoundingClientRect();
+        const candidates = Array.from((modal || document).querySelectorAll('a[href]')).filter(a => a.offsetParent !== null);
+        let best = null; let bestDist = Infinity;
+        for (const a of candidates) {
+            let href = a.getAttribute('href') || '';
+            if (!href) continue;
+            if (!href.startsWith('http')) { if (!href.startsWith('/')) href = '/' + href; }
+            try {
+                const u = href.startsWith('http') ? new URL(href) : new URL(href, window.location.origin);
+                const path = u.pathname.replace(/^\/+|\/+$/g, '');
+                if (!path) continue;
+                const parts = path.split('/');
+                if (parts.length !== 1) continue;
+                const candidate = parts[0];
+                if (!isValidUser(candidate)) continue;
+                const r = a.getBoundingClientRect();
+                const dx = (r.left + r.width/2) - (targetRect.left + targetRect.width/2);
+                const dy = (r.top + r.height/2) - (targetRect.top + targetRect.height/2);
+                const d2 = dx*dx + dy*dy;
+                if (d2 < bestDist) { bestDist = d2; best = candidate.toLowerCase(); }
+            } catch (_) { /* ignore */ }
+        }
+        if (best) return best;
     } catch (error) {
         console.log('Error extracting username:', error);
     }
     return null;
 }
 
+// Get button text from the div inside the button
+function getButtonText(button) {
+    try {
+        const buttonDiv = button.querySelector('div._ap3a._aaco._aacw._aad6._aade');
+        if (buttonDiv) {
+            return buttonDiv.textContent.trim();
+        }
+        // Fallback to button text if div not found
+        return button.textContent.trim();
+    } catch (error) {
+        console.log('Error getting button text:', error);
+        return button.textContent.trim();
+    }
+}
+
 // Scroll the modal to load more users
-function scrollModal() {
-    const modal = document.querySelector('div[role="dialog"]');
+function scrollModal(modalElement = null) {
+    const modal = modalElement || document.querySelector('div[role="dialog"]');
     if (modal) {
         const scrollableElement = modal.querySelector('div[style*="overflow"]') || modal;
         scrollableElement.scrollTop = scrollableElement.scrollHeight;
@@ -419,10 +509,10 @@ document.querySelectorAll = (function(original) {
 function detectButtonStateChange(originalButton, userRow, originalText) {
     return new Promise(async (resolve) => {
         let updatedButton = null;
-        let attempts = 0;
-        const maxAttempts = 10; // Increased attempts for better reliability
+        let detectionAttempts = 0;
+        const maxDetectionAttempts = 10; // Increased attempts for better reliability
         
-        while (!updatedButton && attempts < maxAttempts) {
+        while (!updatedButton && detectionAttempts < maxDetectionAttempts) {
             // Look for the button in the same user row
             const buttons = userRow.querySelectorAll('button');
             for (let btn of buttons) {
@@ -437,7 +527,7 @@ function detectButtonStateChange(originalButton, userRow, originalText) {
             if (!updatedButton) {
                 // Wait a bit more and try again
                 await sleep(300);
-                attempts++;
+                detectionAttempts++;
             }
         }
         
@@ -446,4 +536,5 @@ function detectButtonStateChange(originalButton, userRow, originalText) {
 }
 
 // Make the function available globally for testing
+window.detectButtonStateChange = detectButtonStateChange; 
 window.detectButtonStateChange = detectButtonStateChange; 
