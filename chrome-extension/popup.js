@@ -89,7 +89,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // On someone's followers page - show follow option
             followSection.classList.add('show');
             unfollowSection.classList.remove('show');
-            pageInfoDiv.textContent = "✅ Ready to follow users from this followers list";
+            pageInfoDiv.textContent = "✅ Ready to follow users from this followers list (private accounts will be skipped)";
             statusDiv.textContent = "Ready to follow users. Enter number and click START FOLLOWING.";
         } else if (pageType === 'following') {
             // On user's following page - show unfollow option
@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
             followSection.classList.remove('show');
             unfollowSection.classList.remove('show');
             pageInfoDiv.textContent = "❌ Navigate to Instagram followers or following page";
-            statusDiv.textContent = "Navigate to:\n• Someone's followers page (to follow)\n• Your following page (to unfollow)";
+            statusDiv.textContent = "Navigate to:\n• Someone's followers page (to follow - private accounts will be skipped)\n• Your following page (to unfollow)";
         }
     }
 
@@ -168,40 +168,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Clear all batches button
-    const clearBatchesBtn = document.getElementById('clearBatches');
-    if (clearBatchesBtn) {
-        clearBatchesBtn.addEventListener('click', function() {
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {action: 'clearFollowedBatches'}, function(response) {
-                    if (response) {
-                        updateStatus(response.message);
-                        updateBatchesList([]);
-                    }
-                });
-            });
-        });
-    }
 
-    // Cleanup empty batches button
-    const cleanupBatchesBtn = document.getElementById('cleanupBatches');
-    if (cleanupBatchesBtn) {
-        cleanupBatchesBtn.addEventListener('click', function() {
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                chrome.tabs.sendMessage(tabs[0].id, {action: 'cleanupEmptyBatches'}, function(response) {
-                    if (response) {
-                        updateStatus(response.message);
-                        // Update batches list after cleanup
-                        chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedBatches'}, function(batchesResponse) {
-                            if (batchesResponse) {
-                                updateBatchesList(batchesResponse.batches);
-                            }
-                        });
-                    }
-                });
-            });
-        });
-    }
 
     // Update status display
     function updateStatus(message) {

@@ -1,6 +1,6 @@
 # 📸 Instagram Bot - Chrome Extension
 
-A Chrome extension for Instagram automation that works directly in your browser. Follow and unfollow users with precise control while using your real Instagram session.
+A Chrome extension for Instagram automation that works directly in your browser. Follow and unfollow users with precise control while using your real Instagram session. **Now with intelligent private account detection!**
 
 ## 🎨 Interface Preview
 
@@ -10,8 +10,9 @@ The extension features a **vintage Windows-style popup interface** with:
 - **Monospace font** for that retro computer feel
 - **Real-time status updates** with timestamps
 - **Smart page detection** showing current Instagram page type
-- **Followed list counter** showing stored usernames count
-- **Clear list button** for managing followed users
+- **Batch management** showing followed batches with auto-deletion
+- **Smart batch system** that automatically removes empty batches
+- **Private account detection** that automatically skips private accounts during follow operations
 
 ### Extension Icon
 - **Instagram-themed icon** with gradient background (pink to purple)
@@ -21,10 +22,10 @@ The extension features a **vintage Windows-style popup interface** with:
 
 ### Popup Interface Sections:
 - **Page Detection:** Shows "Followers of @username" or "Following of @username"
-- **Follow Users:** Input field for number (1-50) + "START FOLLOWING" button
-- **Unfollow Users:** Input field for number (1-50) + "START UNFOLLOWING" button  
-- **Followed List:** Shows count of stored usernames + "CLEAR LIST" button
-- **Status Log:** Real-time updates with timestamps and progress indicators
+- **Follow Users:** Input field for number (1-50) + "START FOLLOWING" button + private account info
+- **Unfollow Users:** Batch selection dropdown + "START UNFOLLOWING" button  
+- **Followed Batches:** Shows batch count and total users with auto-deletion
+- **Status Log:** Real-time updates with timestamps and progress indicators including private account handling
 
 ### Interface Screenshots:
 
@@ -54,9 +55,8 @@ The extension features a **vintage Windows-style popup interface** with:
 │ Number to follow: [10]  │
 │ [START FOLLOWING]       │
 │                         │
-│ FOLLOWED LIST           │
-│ Followed: 15 users      │
-│ [CLEAR LIST]            │
+│ FOLLOWED BATCHES        │
+│ 1 batches, 15 users     │
 │                         │
 │ STATUS                  │
 │ Ready to follow users   │
@@ -74,12 +74,11 @@ The extension features a **vintage Windows-style popup interface** with:
 │ Following of @username  │
 │                         │
 │ UNFOLLOW USERS          │
-│ Number to unfollow: [10]│
+│ Select batch: [Batch 1] │
 │ [START UNFOLLOWING]     │
 │                         │
-│ FOLLOWED LIST           │
-│ Followed: 15 users      │
-│ [CLEAR LIST]            │
+│ FOLLOWED BATCHES        │
+│ 1 batches, 15 users     │
 │                         │
 │ STATUS                  │
 │ Ready to unfollow users │
@@ -100,9 +99,8 @@ The extension features a **vintage Windows-style popup interface** with:
 │ Number to follow: [10]  │
 │ [START FOLLOWING]       │
 │                         │
-│ FOLLOWED LIST           │
-│ Followed: 18 users      │
-│ [CLEAR LIST]            │
+│ FOLLOWED BATCHES        │
+│ 1 batches, 18 users     │
 │                         │
 │ STATUS                  │
 │ [6:15:30 PM] ✅ Followed│
@@ -208,7 +206,51 @@ div.textContent.toLowerCase().trim() === 'follow'
 
 ---
 
-## 🗂️ File & Component Overview
+## 🔍 Private Account Detection Feature
+
+### What It Does
+The extension now **intelligently detects the difference between public and private Instagram accounts** during follow operations, ensuring you only follow public accounts while automatically handling private accounts.
+
+### How It Works
+1. **Button State Monitoring:** After clicking "Follow", the extension monitors button text changes
+2. **Public Account Detection:** 
+   - Button changes from "Follow" → "Following"
+   - Account is successfully followed and added to batch
+   - Counts toward your follow goal ✅
+3. **Private Account Detection:**
+   - Button changes from "Follow" → "Requested" 
+   - Account is automatically unfollowed immediately
+   - Not added to batch, doesn't count toward goal 🔄
+
+### Benefits
+- **No Pending Requests:** Private account follow requests are automatically removed
+- **Clean Account Status:** Your Instagram account stays clean with no pending requests
+- **Accurate Follow Counts:** Only public accounts count toward your follow target
+- **Better Instagram Health:** Avoids accumulating pending requests that can hurt account reputation
+- **Automatic Cleanup:** No manual intervention needed for private accounts
+- **Smart Batch Management:** Only public accounts are stored in batches for later unfollowing
+
+### Example Workflow
+```
+User clicks "Follow" on @user123
+↓
+Extension waits 1.5 seconds for button update
+↓
+Button shows "Following" → Public account ✅
+OR
+Button shows "Requested" → Private account, auto-unfollowed 🔄
+```
+
+### Status Messages
+During operation, you'll see status updates like:
+- `✅ Followed @username (public account) (1/10)`
+- `⚠️ @username is private, unfollowing...`
+- `🔄 Unfollowed @username (private account) - 2 private accounts removed`
+- `🎉 Successfully followed 8 public users! (2 private accounts were skipped)`
+
+---
+
+## 📦 Extension Structure
 
 - `manifest.json` — Chrome extension configuration with icon references and storage permissions
 - `popup.html` — Extension popup interface (vintage Windows style)
@@ -299,12 +341,13 @@ graph LR;
 - **Smart Scrolling:** Automatically scrolls to find more users if needed
 - **Progress Tracking:** Real-time status updates with timestamps
 
-### Username Storage System
+### Batch Management System
 - **Chrome Storage:** Uses `chrome.storage.local` for persistence
-- **Memory Array:** Maintains `followedUsernames` array in content script
+- **Batch Array:** Maintains `followedBatches` array with timestamps and usernames
 - **Automatic Saving:** Saves after each successful follow
-- **Targeted Unfollowing:** Only attempts to unfollow stored usernames
-- **UI Integration:** Shows count and provides clear list button
+- **Targeted Unfollowing:** Only attempts to unfollow users from selected batch
+- **Auto-Deletion:** Automatically removes batches when they become empty
+- **UI Integration:** Shows batch count and provides batch selection dropdown
 
 ### Safety Features
 - **Session Management:** Uses your real browser session (no separate login)
@@ -338,14 +381,25 @@ graph LR;
 2. Click "followers" to open the followers list (URL becomes `instagram.com/1001tracklists/followers/`)
 3. Click the extension icon
 4. Enter number to follow and click "START FOLLOWING"
-5. Watch the "FOLLOWED LIST" count increase
+5. The extension automatically detects public vs private accounts:
+   - **Public accounts:** Successfully followed and added to batch ✅
+   - **Private accounts:** Automatically skipped and not added to batch 🔄
+6. Watch the "FOLLOWED BATCHES" count increase (only public accounts are counted)
 
 ### To Unfollow Users:
 1. Go to your own Instagram profile  
 2. Click "following" to open your following list (URL becomes `instagram.com/YOUR_USERNAME/following/`)
 3. Click the extension icon
-4. Enter number to unfollow and click "START UNFOLLOWING"
-5. Only users from your stored list will be unfollowed
+4. Select a batch from the dropdown and click "START UNFOLLOWING"
+5. Only users from the selected batch will be unfollowed
+6. Batches automatically delete when they become empty
+
+### Private Account Handling:
+- **Automatic Detection:** The extension monitors button state changes after clicking "Follow"
+- **Public Accounts:** Button changes to "Following" → Account is followed and stored in batch
+- **Private Accounts:** Button changes to "Requested" → Account is automatically unfollowed
+- **Clean Status:** No pending follow requests accumulate from private accounts
+- **Accurate Counts:** Only public accounts count toward your follow goal and are stored in batches
 
 ---
 
@@ -353,10 +407,14 @@ graph LR;
 
 - **Undetectable:** Uses your real browser session and manual navigation
 - **Random Delays:** 0.7-2.5 second random delays mimic human behavior
+- **Smart Account Filtering:** Automatically detects and skips private accounts
+- **No Pending Requests:** Private account follow requests are immediately removed
 - **No Automation Detection:** Since you manually navigate and use real session
 - **Rate Limit Aware:** Stops if Instagram blocks actions
 - **Manual Override:** You can stop automation at any time by closing the popup
 - **Username Storage:** Targeted unfollowing reduces unnecessary actions
+- **Clean Account Status:** Maintains clean Instagram account with no pending requests
+- **Accurate Follow Counts:** Only counts actual public account follows, not pending requests
 
 ---
 
@@ -406,11 +464,13 @@ graph LR;
 - **Page Refresh:** If Instagram refreshes the page, just reopen the extension
 - **Browser Required:** Must use Chrome browser with extension installed
 - **URL Pattern:** Must be on page with URL pattern `instagram.com/USERNAME/followers/` or `instagram.com/USERNAME/following/`
-- **Username Storage:** Followed usernames are stored locally in your browser
-- **Clear List:** Use "CLEAR LIST" button to reset stored usernames
+- **Batch Storage:** Only successfully followed public accounts are stored in batches with timestamps
+- **Auto-Deletion:** Batches automatically delete when they become empty
+- **Private Account Handling:** Private accounts are automatically detected and skipped, maintaining clean account status
+- **No Pending Requests:** The extension automatically removes private account follow requests to keep your Instagram account clean
 
 ---
 
 ## ⚠️ Disclaimer
 
-This tool is for educational and personal use only. Use responsibly and in accordance with Instagram's terms of service. The extension works with your real Instagram account, so exercise caution with the number of actions performed. Username storage is local to your browser and not shared with any external services. 
+This tool is for educational and personal use only. Use responsibly and in accordance with Instagram's terms of service. The extension works with your real Instagram account, so exercise caution with the number of actions performed. Batch storage is local to your browser and not shared with any external services. 

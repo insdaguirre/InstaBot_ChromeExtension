@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // On someone's followers page - show follow option
             followSection.classList.add('show');
             unfollowSection.classList.remove('show');
-            pageInfoDiv.textContent = "✅ Ready to follow users from this followers list";
+            pageInfoDiv.textContent = "✅ Ready to follow users from this followers list (private accounts will be skipped)";
             statusDiv.textContent = "Ready to follow users. Enter number and click START FOLLOWING.";
         } else if (pageType === 'following') {
             // On user's following page - show unfollow option
@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
             followSection.classList.remove('show');
             unfollowSection.classList.remove('show');
             pageInfoDiv.textContent = "❌ Navigate to Instagram followers or following page";
-            statusDiv.textContent = "Navigate to:\n• Someone's followers page (to follow)\n• Your following page (to unfollow)";
+            statusDiv.textContent = "Navigate to:\n• Someone's followers page (to follow - private accounts will be skipped)\n• Your following page (to unfollow)";
         }
     }
 

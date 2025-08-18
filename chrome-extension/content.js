@@ -21,20 +21,7 @@ function saveFollowedBatches() {
     });
 }
 
-// Clean up empty batches
-function cleanupEmptyBatches() {
-    const originalCount = followedBatches.length;
-    followedBatches = followedBatches.filter(batch => batch.usernames.length > 0);
-    const removedCount = originalCount - followedBatches.length;
-    
-    if (removedCount > 0) {
-        saveFollowedBatches();
-        console.log(`🗑️ Cleaned up ${removedCount} empty batches`);
-        updateStatus(`🗑️ Cleaned up ${removedCount} empty batches`);
-    }
-    
-    return removedCount;
-}
+
 
 // Get all usernames from all batches
 function getAllFollowedUsernames() {
@@ -70,13 +57,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         return true; // Indicates we will respond asynchronously
     } else if (request.action === 'getFollowedBatches') {
         sendResponse({batches: followedBatches});
-    } else if (request.action === 'clearFollowedBatches') {
-        followedBatches = [];
-        saveFollowedBatches();
-        sendResponse({message: "🗑️ Cleared all followed batches"});
-    } else if (request.action === 'cleanupEmptyBatches') {
-        const removedCount = cleanupEmptyBatches();
-        sendResponse({message: `🗑️ Cleaned up ${removedCount} empty batches`});
     } else if (request.action === 'unfollowBatch') {
         if (!isRunning) {
             startUnfollowingBatch(request.batchIndex, request.count).then(result => {
@@ -93,20 +73,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
 function checkCurrentPage() {
     const url = window.location.href;
     console.log('🔍 Checking page with URL:', url);
-    
-    // Check if we're on Instagram at all
-    if (!url.includes('instagram.com')) {
-        console.log('❌ Not on Instagram');
-        return {
-            pageType: 'other',
-            pageInfo: 'Not on Instagram'
-        };
-    }
-    
-    // ENHANCED URL-BASED DETECTION
-    console.log('🔍 Checking URL patterns...');
-    console.log('URL includes /followers/:', url.includes('/followers/'));
-    console.log('URL includes /following/:', url.includes('/following/'));
     
     if (url.includes('/followers/')) {
         const username = extractUsernameFromUrl(url);
@@ -126,209 +92,17 @@ function checkCurrentPage() {
         };
     }
     
-    // FALLBACK: Check for modal dialog and its content
-    console.log('🔍 Checking for modal dialog...');
-    const modal = document.querySelector('div[role="dialog"]');
-    if (modal) {
-        console.log('✅ Found modal dialog');
-        const modalText = modal.textContent.toLowerCase();
-        console.log('Modal text contains "followers":', modalText.includes('followers'));
-        console.log('Modal text contains "following":', modalText.includes('following'));
-        
-        if (modalText.includes('followers')) {
-            const username = extractUsernameFromPage();
-            console.log('✅ DETECTED: Followers page via modal for @', username);
-            return {
-                pageType: 'followers',
-                pageInfo: `Followers of @${username}`
-            };
-        }
-        
-        if (modalText.includes('following')) {
-            const username = extractUsernameFromPage();
-            console.log('✅ DETECTED: Following page via modal for @', username);
-            return {
-                pageType: 'following',
-                pageInfo: `Following of @${username}`
-            };
-        }
-    }
-    
-    // FALLBACK: Check for follow buttons (if URL doesn't work)
-    console.log('🔍 Checking for follow buttons...');
-    const followButtons = findFollowButtons();
-    const followingButtons = findFollowingButtons();
-    
-    console.log('🔍 Found follow buttons:', followButtons.length);
-    console.log('🔍 Found following buttons:', followingButtons.length);
-    
-    // If we found buttons, we're definitely on the right page
-    if (followButtons.length > 0) {
-        const username = extractUsernameFromPage();
-        console.log('✅ DETECTED: Followers page via buttons for @', username);
-        console.log('✅ Button detection successful - found', followButtons.length, 'follow buttons');
-        return {
-            pageType: 'followers',
-            pageInfo: `Followers of @${username}`
-        };
-    }
-    
-    if (followingButtons.length > 0) {
-        const username = extractUsernameFromPage();
-        console.log('✅ DETECTED: Following page via buttons for @', username);
-        console.log('✅ Button detection successful - found', followingButtons.length, 'following buttons');
-        return {
-            pageType: 'following',
-            pageInfo: `Following of @${username}`
-        };
-    }
-    
-    // FINAL FALLBACK: Check page title
-    console.log('🔍 Checking page title...');
-    const pageTitle = document.title.toLowerCase();
-    console.log('Page title:', pageTitle);
-    
-    if (pageTitle.includes('followers')) {
-        const username = extractUsernameFromPage();
-        console.log('✅ DETECTED: Followers page via title for @', username);
-        return {
-            pageType: 'followers',
-            pageInfo: `Followers of @${username}`
-        };
-    }
-    
-    if (pageTitle.includes('following')) {
-        const username = extractUsernameFromPage();
-        console.log('✅ DETECTED: Following page via title for @', username);
-        return {
-            pageType: 'following',
-            pageInfo: `Following of @${username}`
-        };
-    }
-    
-    // ULTIMATE FALLBACK: Check for any button with "Follow" text anywhere
-    console.log('🔍 ULTIMATE FALLBACK: Checking all buttons on page...');
-    const allButtons = document.querySelectorAll('button');
-    console.log('Total buttons on page:', allButtons.length);
-    
-    for (let i = 0; i < Math.min(allButtons.length, 10); i++) {
-        const button = allButtons[i];
-        const buttonText = button.textContent.toLowerCase().trim();
-        console.log(`Button ${i + 1} text: "${buttonText}"`);
-        
-        if (buttonText === 'follow') {
-            const username = extractUsernameFromPage();
-            console.log('✅ DETECTED: Followers page via ultimate fallback for @', username);
-            return {
-                pageType: 'followers',
-                pageInfo: `Followers of @${username}`
-            };
-        }
-    }
-    
     console.log('❌ Could not detect page type');
-    console.log('URL was:', url);
-    console.log('Page title was:', document.title);
-    console.log('Total buttons found:', allButtons.length);
     return {
         pageType: 'other',
         pageInfo: 'Not on followers/following page'
     };
 }
 
-// Debug function - can be called from console
-function debugPageDetection() {
-    console.log('🔍 === DEBUG PAGE DETECTION ===');
-    console.log('URL:', window.location.href);
-    console.log('Page title:', document.title);
-    
-    // Check for followers text
-    const followersElements = Array.from(document.querySelectorAll('*')).filter(el => 
-        el.textContent && el.textContent.toLowerCase().includes('followers')
-    );
-    console.log('Elements with "followers":', followersElements.length);
-    
-    // Check for follow buttons
-    const followButtons = findFollowButtons();
-    console.log('Follow buttons found:', followButtons.length);
-    if (followButtons.length > 0) {
-        console.log('First follow button:', followButtons[0]);
-        console.log('First button text:', followButtons[0].textContent);
-    }
-    
-    // Check for modal
-    const modal = document.querySelector('div[role="dialog"]');
-    console.log('Modal found:', !!modal);
-    if (modal) {
-        console.log('Modal text:', modal.textContent.substring(0, 200));
-    }
-    
-    // Test page detection
-    const result = checkCurrentPage();
-    console.log('Page detection result:', result);
-    
-    console.log('🔍 === END DEBUG ===');
-    return result;
-}
-
-// Make debug function available globally
-window.debugPageDetection = debugPageDetection;
-
 // Extract username from Instagram URL
 function extractUsernameFromUrl(url) {
-    console.log('🔍 Extracting username from URL:', url);
-    
-    // Method 1: Direct pattern matching for followers/following
-    const followersMatch = url.match(/instagram\.com\/([^\/]+)\/followers/);
-    if (followersMatch) {
-        console.log('✅ Found username from followers URL:', followersMatch[1]);
-        return followersMatch[1];
-    }
-    
-    const followingMatch = url.match(/instagram\.com\/([^\/]+)\/following/);
-    if (followingMatch) {
-        console.log('✅ Found username from following URL:', followingMatch[1]);
-        return followingMatch[1];
-    }
-    
-    // Method 2: General Instagram username pattern
-    const generalMatch = url.match(/instagram\.com\/([^\/\?]+)/);
-    if (generalMatch && generalMatch[1] && !generalMatch[1].includes('/')) {
-        console.log('✅ Found username from general URL:', generalMatch[1]);
-        return generalMatch[1];
-    }
-    
-    console.log('❌ Could not extract username from URL');
-    return 'unknown';
-}
-
-// Extract username from the current page (not just URL)
-function extractUsernameFromPage() {
-    // Method 1: Try to get from URL first
-    const url = window.location.href;
-    const urlMatch = url.match(/instagram\.com\/([^\/]+)/);
-    if (urlMatch && urlMatch[1] && !urlMatch[1].includes('/')) {
-        return urlMatch[1];
-    }
-    
-    // Method 2: Look for username in page elements
-    const usernameElements = document.querySelectorAll('a[href*="/"]');
-    for (let element of usernameElements) {
-        const href = element.href;
-        const match = href.match(/instagram\.com\/([^\/\?]+)/);
-        if (match && match[1] && match[1] !== 'p' && match[1] !== 'explore' && match[1] !== 'accounts') {
-            return match[1];
-        }
-    }
-    
-    // Method 3: Look for username in text content
-    const pageText = document.body.textContent;
-    const usernameMatch = pageText.match(/@([a-zA-Z0-9._]+)/);
-    if (usernameMatch) {
-        return usernameMatch[1];
-    }
-    
-    return 'unknown';
+    const match = url.match(/instagram\.com\/([^\/]+)\/(followers|following)/);
+    return match ? match[1] : 'unknown';
 }
 
 // Get random delay between 0.7 and 2.5 seconds
@@ -424,10 +198,66 @@ function findFollowingButtons() {
     return followingButtons;
 }
 
+// Enhanced button state detection function
+function detectButtonStateChange(originalButton, userRow, originalText) {
+    return new Promise(async (resolve) => {
+        let updatedButton = null;
+        let attempts = 0;
+        const maxAttempts = 10; // Increased attempts for better reliability
+        
+        while (!updatedButton && attempts < maxAttempts) {
+            // Look for the button in the same user row
+            const buttons = userRow.querySelectorAll('button');
+            for (let btn of buttons) {
+                const btnText = btn.textContent.trim();
+                // Check if this button has changed from the original state
+                if (btnText !== originalText && (btnText.includes('Following') || btnText.includes('Requested'))) {
+                    updatedButton = btn;
+                    break;
+                }
+            }
+            
+            if (!updatedButton) {
+                // Wait a bit more and try again
+                await sleep(300);
+                attempts++;
+            }
+        }
+        
+        resolve(updatedButton);
+    });
+}
+
+// Make the function available globally for testing
+window.detectButtonStateChange = detectButtonStateChange;
+
+// Helper function to check if profile page has followers/following buttons
+function checkProfilePageButtons() {
+    const buttons = document.querySelectorAll('button');
+    let hasFollowers = false;
+    let hasFollowing = false;
+    
+    buttons.forEach(button => {
+        const text = button.textContent.trim().toLowerCase();
+        if (text.includes('followers')) {
+            hasFollowers = true;
+        }
+        if (text.includes('following')) {
+            hasFollowing = true;
+        }
+    });
+    
+    return { hasFollowers, hasFollowing };
+}
+
+// Make the function available globally for testing
+window.checkProfilePageButtons = checkProfilePageButtons;
+
 // Start following users
 async function startFollowing(count) {
     isRunning = true;
     let followed = 0;
+    let privateAccountsUnfollowed = 0;
     let currentBatchUsernames = []; // Store usernames for this batch
     
     updateStatus(`🎯 Looking for follow buttons...`);
@@ -463,10 +293,13 @@ async function startFollowing(count) {
                     if (username) {
                         updateStatus(`⏳ Following @${username} (${followed + 1}/${count})`);
                         
-                        // Add to current batch
-                        if (!currentBatchUsernames.includes(username)) {
-                            currentBatchUsernames.push(username);
-                            console.log('📋 Added', username, 'to current batch');
+                        // Store original button text and find the user row for reliable button tracking
+                        const originalText = button.textContent.trim();
+                        const userRow = button.closest('div[role="dialog"] div');
+                        
+                        if (!userRow) {
+                            updateStatus(`⚠️ Could not find user row for @${username}, skipping...`);
+                            continue;
                         }
                         
                         // Random delay before clicking
@@ -478,9 +311,109 @@ async function startFollowing(count) {
                         button.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         await sleep(500);
                         button.click();
-                        followed++;
                         
-                        updateStatus(`✅ Followed @${username} (${followed}/${count})`);
+                        // Wait longer for Instagram's UI to update and stabilize
+                        await sleep(2000);
+                        
+                        // Find the updated button by looking in the same user row
+                        let updatedButton = null;
+                        let attempts = 0;
+                        const maxAttempts = 5;
+                        
+                        while (!updatedButton && attempts < maxAttempts) {
+                            // Look for the button in the same user row
+                            const buttons = userRow.querySelectorAll('button');
+                            for (let btn of buttons) {
+                                const btnText = btn.textContent.trim();
+                                // Check if this button has changed from the original state
+                                if (btnText !== originalText && (btnText.includes('Following') || btnText.includes('Requested'))) {
+                                    updatedButton = btn;
+                                    break;
+                                }
+                            }
+                            
+                            if (!updatedButton) {
+                                // Wait a bit more and try again
+                                await sleep(500);
+                                attempts++;
+                            }
+                        }
+                        
+                        if (!updatedButton) {
+                            updateStatus(`❓ Could not detect button state change for @${username}, skipping...`);
+                            continue;
+                        }
+                        
+                        const newText = updatedButton.textContent.trim();
+                        
+                        console.log(`Button state change for @${username}: "${originalText}" -> "${newText}"`);
+                        
+                        if (newText.toLowerCase().includes("following")) {
+                            // Public account - successfully followed
+                            followed++;
+                            
+                            // Add to current batch only if successfully followed
+                            if (!currentBatchUsernames.includes(username)) {
+                                currentBatchUsernames.push(username);
+                                console.log('📋 Added', username, 'to current batch (public account)');
+                            }
+                            
+                            updateStatus(`✅ Followed @${username} (public account) (${followed}/${count})`);
+                        } else if (newText.toLowerCase().includes("requested")) {
+                            // Private account - unfollow it
+                            updateStatus(`⚠️ @${username} is private, unfollowing...`);
+                            
+                            // Wait for the button to fully stabilize
+                            await sleep(1500);
+                            
+                            // Click the button again to unfollow
+                            updatedButton.click();
+                            await sleep(1500);
+                            
+                            // Look for unfollow confirmation button with multiple methods
+                            let unfollowBtn = null;
+                            
+                            // Method 1: Look for button with "Unfollow" text
+                            unfollowBtn = findUnfollowButton();
+                            
+                            // Method 2: Look for button with specific Instagram structure
+                            if (!unfollowBtn) {
+                                const allButtons = document.querySelectorAll('button');
+                                for (let btn of allButtons) {
+                                    if (btn.textContent.trim().includes('Unfollow')) {
+                                        unfollowBtn = btn;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            // Method 3: Look for button in the confirmation dialog
+                            if (!unfollowBtn) {
+                                const dialogs = document.querySelectorAll('div[role="dialog"]');
+                                for (let dialog of dialogs) {
+                                    const btn = dialog.querySelector('button');
+                                    if (btn && btn.textContent.trim().includes('Unfollow')) {
+                                        unfollowBtn = btn;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if (unfollowBtn) {
+                                unfollowBtn.click();
+                                await sleep(1000);
+                                privateAccountsUnfollowed++;
+                                updateStatus(`🔄 Unfollowed @${username} (private account) - ${privateAccountsUnfollowed} private accounts removed`);
+                            } else {
+                                updateStatus(`❌ Could not find unfollow confirmation for @${username}, may need manual intervention`);
+                                console.log('Unfollow button not found, available buttons:', 
+                                    Array.from(document.querySelectorAll('button')).map(b => b.textContent.trim()));
+                            }
+                        } else {
+                            // Button didn't change as expected, might be an error
+                            updateStatus(`❓ Unexpected button state for @${username}: "${newText}" (expected "Following" or "Requested")`);
+                            console.log(`Unexpected button state: "${newText}" for @${username}`);
+                        }
                         
                         // Random delay between follows
                         const nextDelay = getRandomDelay();
@@ -513,12 +446,12 @@ async function startFollowing(count) {
             };
             followedBatches.push(batch);
             saveFollowedBatches();
-            updateStatus(`📦 Saved batch with ${currentBatchUsernames.length} users`);
+            updateStatus(`📦 Saved batch with ${currentBatchUsernames.length} public users`);
         }
         
         const message = followed === count 
-            ? `🎉 Successfully followed ${followed} users!`
-            : `⚠️ Followed ${followed}/${count} users (no more available)`;
+            ? `🎉 Successfully followed ${followed} public users! (${privateAccountsUnfollowed} private accounts were skipped)`
+            : `⚠️ Followed ${followed}/${count} public users (${privateAccountsUnfollowed} private accounts were skipped)`;
             
         updateStatus(message);
         return {message};
@@ -625,6 +558,8 @@ async function startUnfollowingBatch(batchIndex, count) {
                             saveFollowedBatches();
                             updateStatus(`🗑️ Auto-deleted empty batch ${batchIndex + 1}`);
                             console.log('🗑️ Auto-deleted empty batch', batchIndex + 1);
+                            // Break out of the loop since the batch no longer exists
+                            break;
                         } else {
                             // Save the updated batch
                             saveFollowedBatches();
@@ -637,9 +572,43 @@ async function startUnfollowingBatch(batchIndex, count) {
                     await sleep(nextDelay * 1000);
                 } else {
                     updateStatus(`⚠️ Could not find unfollow confirmation for @${username}`);
+                    // Remove from batch even if unfollow failed
+                    const index = batch.usernames.indexOf(username);
+                    if (index > -1) {
+                        batch.usernames.splice(index, 1);
+                        console.log('📋 Removed', username, 'from batch', batchIndex + 1, '(unfollow failed)');
+                        saveFollowedBatches();
+                        
+                        // Check if batch is now empty and remove it
+                        if (batch.usernames.length === 0) {
+                            followedBatches.splice(batchIndex, 1);
+                            saveFollowedBatches();
+                            updateStatus(`🗑️ Auto-deleted empty batch ${batchIndex + 1}`);
+                            console.log('🗑️ Auto-deleted empty batch', batchIndex + 1);
+                            // Break out of the loop since the batch no longer exists
+                            break;
+                        }
+                    }
                 }
             } else {
                 updateStatus(`⚠️ Could not find @${username} in search results`);
+                // Remove from batch even if user not found
+                const index = batch.usernames.indexOf(username);
+                if (index > -1) {
+                    batch.usernames.splice(index, 1);
+                    console.log('📋 Removed', username, 'from batch', batchIndex + 1, '(user not found)');
+                    saveFollowedBatches();
+                    
+                    // Check if batch is now empty and remove it
+                    if (batch.usernames.length === 0) {
+                        followedBatches.splice(batchIndex, 1);
+                        saveFollowedBatches();
+                        updateStatus(`🗑️ Auto-deleted empty batch ${batchIndex + 1}`);
+                        console.log('🗑️ Auto-deleted empty batch', batchIndex + 1);
+                        // Break out of the loop since the batch no longer exists
+                        break;
+                    }
+                }
             }
             
             // Clear search for next iteration
@@ -648,13 +617,7 @@ async function startUnfollowingBatch(batchIndex, count) {
             await sleep(1000);
         }
         
-        // Final check for empty batches after processing all users
-        const remainingBatches = followedBatches.filter(batch => batch.usernames.length > 0);
-        if (remainingBatches.length !== followedBatches.length) {
-            followedBatches = remainingBatches;
-            saveFollowedBatches();
-            updateStatus(`🗑️ Cleaned up empty batches - ${followedBatches.length} batches remaining`);
-        }
+
         
         // Handle the case where count is -1 (unfollow entire batch)
         const targetCount = count === -1 ? batchUsernames.length : count;
@@ -775,281 +738,4 @@ function findUserInSearchResults(targetUsername) {
         const href = link.href;
         const match = href.match(/instagram\.com\/([^\/\?]+)/);
         if (match && match[1] === targetUsername) {
-            console.log(`🔍 Found link for @${targetUsername}: ${href}`);
-            
-            // Find the following button near this link
-            const container = link.closest('div');
-            if (container) {
-                const nearbyButton = container.querySelector('button');
-                if (nearbyButton) {
-                    const buttonText = nearbyButton.textContent.toLowerCase().trim();
-                    console.log(`🔍 Nearby button text: "${buttonText}"`);
-                    if (buttonText === 'following' || buttonText.includes('following')) {
-                        console.log(`✅ Found @${targetUsername} in search results via link`);
-                        return nearbyButton;
-                    }
-                }
-            }
-            
-            // Method 2B: Look for buttons in nearby containers
-            let parent = link.parentElement;
-            for (let i = 0; i < 3; i++) {
-                if (!parent) break;
-                const buttons = parent.querySelectorAll('button');
-                for (let button of buttons) {
-                    const buttonText = button.textContent.toLowerCase().trim();
-                    if (buttonText === 'following' || buttonText.includes('following')) {
-                        console.log(`✅ Found @${targetUsername} in search results via nearby button`);
-                        return button;
-                    }
-                }
-                parent = parent.parentElement;
-            }
-        }
-    }
-    
-    console.log(`❌ Could not find @${targetUsername} in search results`);
-    return null;
-}
-
-// Get username from a follow/following button
-function getUsernameFromButton(button) {
-    try {
-        // Method 1: Look for username in the same container as the button
-        const userContainer = button.closest('div[role="dialog"] div');
-        if (userContainer) {
-            // Look for any link that contains a username
-            const links = userContainer.querySelectorAll('a[href*="/"]');
-            for (let link of links) {
-                const href = link.href;
-                const match = href.match(/instagram\.com\/([^\/\?]+)/);
-                if (match && match[1] && match[1] !== 'p' && match[1] !== 'explore') {
-                    return match[1];
-                }
-            }
-        }
-        
-        // Method 2: Look for username in parent containers
-        let parent = button.parentElement;
-        for (let i = 0; i < 5; i++) { // Check up to 5 levels up
-            if (!parent) break;
-            
-            const links = parent.querySelectorAll('a[href*="/"]');
-            for (let link of links) {
-                const href = link.href;
-                const match = href.match(/instagram\.com\/([^\/\?]+)/);
-                if (match && match[1] && match[1] !== 'p' && match[1] !== 'explore') {
-                    return match[1];
-                }
-            }
-            parent = parent.parentElement;
-        }
-        
-        // Method 3: Look for username in nearby elements
-        const nearbyLinks = document.querySelectorAll('a[href*="/"]');
-        for (let link of nearbyLinks) {
-            const href = link.href;
-            const match = href.match(/instagram\.com\/([^\/\?]+)/);
-            if (match && match[1] && match[1] !== 'p' && match[1] !== 'explore') {
-                // Check if this link is close to our button
-                const rect1 = button.getBoundingClientRect();
-                const rect2 = link.getBoundingClientRect();
-                const distance = Math.sqrt(
-                    Math.pow(rect1.left - rect2.left, 2) + 
-                    Math.pow(rect1.top - rect2.top, 2)
-                );
-                if (distance < 200) { // Within 200px
-                    return match[1];
-                }
-            }
-        }
-        
-    } catch (error) {
-        console.log('Error extracting username:', error);
-    }
-    return null;
-}
-
-// Scroll the modal to load more users
-function scrollModal() {
-    const modal = document.querySelector('div[role="dialog"]');
-    if (modal) {
-        const scrollableElement = modal.querySelector('div[style*="overflow"]') || modal;
-        scrollableElement.scrollTop = scrollableElement.scrollHeight;
-    }
-}
-
-// Wait for element to appear
-function waitForElement(selector, timeout = 5000) {
-    return new Promise((resolve, reject) => {
-        const element = document.querySelector(selector);
-        if (element) {
-            resolve(element);
-            return;
-        }
-        
-        const observer = new MutationObserver((mutations) => {
-            const element = document.querySelector(selector);
-            if (element) {
-                observer.disconnect();
-                resolve(element);
-            }
-        });
-        
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
-        
-        setTimeout(() => {
-            observer.disconnect();
-            reject(new Error(`Element ${selector} not found within ${timeout}ms`));
-        }, timeout);
-    });
-}
-
-// Sleep function
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-// Send status update to popup
-function updateStatus(message) {
-    chrome.runtime.sendMessage({
-        action: 'updateStatus',
-        message: message
-    });
-} 
-
-// Test function for URL detection
-function testUrlDetection() {
-    console.log('🧪 === TESTING URL DETECTION ===');
-    
-    // Test with your specific URL
-    const testUrl = 'https://www.instagram.com/1001tracklists/followers/';
-    console.log('Testing URL:', testUrl);
-    
-    // Test URL checking
-    console.log('URL includes /followers/:', testUrl.includes('/followers/'));
-    console.log('URL includes /following/:', testUrl.includes('/following/'));
-    
-    // Test username extraction
-    const username = extractUsernameFromUrl(testUrl);
-    console.log('Extracted username:', username);
-    
-    // Test page detection
-    const result = {
-        pageType: testUrl.includes('/followers/') ? 'followers' : 
-                  testUrl.includes('/following/') ? 'following' : 'other',
-        pageInfo: testUrl.includes('/followers/') ? `Followers of @${username}` :
-                  testUrl.includes('/following/') ? `Following of @${username}` : 'Unknown'
-    };
-    
-    console.log('Page detection result:', result);
-    console.log('🧪 === END TEST ===');
-    return result;
-}
-
-// Make test function available globally
-window.testUrlDetection = testUrlDetection; 
-
-// Test function for auto-deletion functionality
-function testAutoDeletion() {
-    console.log('🧪 === TESTING AUTO-DELETION ===');
-    
-    // Create test batches
-    const testBatches = [
-        {
-            timestamp: new Date().toISOString(),
-            count: 3,
-            usernames: ['user1', 'user2', 'user3']
-        },
-        {
-            timestamp: new Date().toISOString(),
-            count: 2,
-            usernames: ['user4', 'user5']
-        },
-        {
-            timestamp: new Date().toISOString(),
-            count: 1,
-            usernames: ['user6']
-        }
-    ];
-    
-    console.log('Original batches:', testBatches.length);
-    
-    // Simulate removing users from batches
-    testBatches[0].usernames = []; // Empty first batch
-    testBatches[1].usernames = ['user4']; // Remove one user from second batch
-    testBatches[2].usernames = []; // Empty third batch
-    
-    console.log('After removing users:');
-    testBatches.forEach((batch, index) => {
-        console.log(`Batch ${index + 1}: ${batch.usernames.length} users remaining`);
-    });
-    
-    // Test cleanup function
-    const remainingBatches = testBatches.filter(batch => batch.usernames.length > 0);
-    console.log('After cleanup:', remainingBatches.length, 'batches remaining');
-    
-    console.log('🧪 === END TEST ===');
-    return remainingBatches;
-}
-
-// Make test function available globally
-window.testAutoDeletion = testAutoDeletion;
-
-// Test function for comprehensive page detection debugging
-function testPageDetection() {
-    console.log('🧪 === COMPREHENSIVE PAGE DETECTION TEST ===');
-    
-    const url = window.location.href;
-    console.log('1. URL Analysis:');
-    console.log('   URL:', url);
-    console.log('   Includes instagram.com:', url.includes('instagram.com'));
-    console.log('   Includes /followers/:', url.includes('/followers/'));
-    console.log('   Includes /following/:', url.includes('/following/'));
-    
-    console.log('\n2. Page Title Analysis:');
-    console.log('   Title:', document.title);
-    console.log('   Title includes "followers":', document.title.toLowerCase().includes('followers'));
-    console.log('   Title includes "following":', document.title.toLowerCase().includes('following'));
-    
-    console.log('\n3. Modal Dialog Analysis:');
-    const modal = document.querySelector('div[role="dialog"]');
-    console.log('   Modal found:', !!modal);
-    if (modal) {
-        console.log('   Modal text (first 200 chars):', modal.textContent.substring(0, 200));
-        console.log('   Modal contains "followers":', modal.textContent.toLowerCase().includes('followers'));
-        console.log('   Modal contains "following":', modal.textContent.toLowerCase().includes('following'));
-    }
-    
-    console.log('\n4. Button Analysis:');
-    const followButtons = findFollowButtons();
-    const followingButtons = findFollowingButtons();
-    console.log('   Follow buttons found:', followButtons.length);
-    console.log('   Following buttons found:', followingButtons.length);
-    
-    if (followButtons.length > 0) {
-        console.log('   First follow button text:', followButtons[0].textContent);
-    }
-    if (followingButtons.length > 0) {
-        console.log('   First following button text:', followingButtons[0].textContent);
-    }
-    
-    console.log('\n5. Username Extraction:');
-    const urlUsername = extractUsernameFromUrl(url);
-    const pageUsername = extractUsernameFromPage();
-    console.log('   Username from URL:', urlUsername);
-    console.log('   Username from page:', pageUsername);
-    
-    console.log('\n6. Final Page Detection Result:');
-    const result = checkCurrentPage();
-    console.log('   Result:', result);
-    
-    console.log('🧪 === END TEST ===');
-    return result;
-}
-
-// Make test function available globally
-window.testPageDetection = testPageDetection; 
+            console.log(`

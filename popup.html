@@ -112,7 +112,7 @@
 <body>
     <div class="title-bar">Instagram Bot</div>
     <div class="container">
-        <div class="page-info" id="pageInfo">Navigate to Instagram followers page</div>
+        <div class="page-info" id="pageInfo">Navigate to Instagram followers page (private accounts will be skipped)</div>
         
         <div class="section">
             <div class="section-title">CURRENT PAGE</div>
@@ -126,6 +126,10 @@
                 <input type="number" id="followCount" value="10" min="1" max="50">
                 <br><br>
                 <button id="startFollow">START FOLLOWING</button>
+                <br><br>
+                <div style="font-size: 9px; color: #666; font-style: italic;">
+                    💡 Bot automatically detects and skips private accounts
+                </div>
             </div>
         </div>
         
@@ -141,7 +145,7 @@
         
         <div class="section">
             <div class="section-title">STATUS</div>
-            <div class="status" id="status">Ready. Navigate to Instagram followers page.</div>
+            <div class="status" id="status">Ready. Navigate to Instagram followers page. Private accounts will be automatically skipped.</div>
         </div>
     </div>
     
