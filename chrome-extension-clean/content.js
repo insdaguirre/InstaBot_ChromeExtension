@@ -126,14 +126,23 @@ async function startFollowing(count) {
                 if (followed >= count) break;
                 
                 try {
-                    // Get username with a simpler, more reliable method
+                    // Force fresh username extraction for each button
+                    console.log(`Processing button ${followed + 1}/${count}`);
                     let displayName = extractUsernameSimple(button, modal);
                     
-                    // If no username found, use a unique identifier
+                    // If no username found, try alternative methods
                     if (!displayName) {
-                        displayName = `user_${followed + 1}`;
+                        console.log('No username found, trying alternative extraction...');
+                        displayName = extractUsernameAlternative(button, modal);
                     }
                     
+                    // If still no username found, use a unique identifier
+                    if (!displayName) {
+                        displayName = `user_${followed + 1}`;
+                        console.log(`Using fallback name: ${displayName}`);
+                    }
+                    
+                    console.log(`Final display name for button ${followed + 1}: ${displayName}`);
                     updateStatus(`⏳ Following @${displayName} (${followed + 1}/${count})`);
                     
                     // Store original button text and find the user row for reliable button tracking
@@ -532,10 +541,15 @@ function extractUsernameSimple(button, modalElement = null) {
             return null;
         }
         
+        console.log('Row found, searching for username...');
+        
         // Strategy 1: Look for profile links in the row
         const links = row.querySelectorAll('a[href*="/"]');
+        console.log(`Found ${links.length} links in row`);
+        
         for (let link of links) {
             const href = link.getAttribute('href');
+            console.log('Checking link:', href);
             if (href && href.startsWith('/') && !href.includes('/followers') && !href.includes('/following') && !href.includes('/p/') && !href.includes('/reel/')) {
                 const username = href.split('/')[1]; // Get the first part after /
                 if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
@@ -547,6 +561,7 @@ function extractUsernameSimple(button, modalElement = null) {
         
         // Strategy 2: Look for any text that looks like a username
         const allText = row.textContent || '';
+        console.log('Row text content:', allText.substring(0, 100) + '...');
         const words = allText.split(/\s+/);
         
         for (let word of words) {
@@ -562,6 +577,8 @@ function extractUsernameSimple(button, modalElement = null) {
         
         // Strategy 3: Look for spans with username-like content
         const spans = row.querySelectorAll('span');
+        console.log(`Found ${spans.length} spans in row`);
+        
         for (let span of spans) {
             const text = span.textContent.trim();
             if (text && /^[a-z0-9._]{1,30}$/i.test(text) && 
@@ -577,6 +594,74 @@ function extractUsernameSimple(button, modalElement = null) {
         return null;
     } catch (error) {
         console.log('Error in simple username extraction:', error);
+        return null;
+    }
+}
+
+// Alternative username extraction method
+function extractUsernameAlternative(button, modalElement = null) {
+    try {
+        console.log('Trying alternative username extraction...');
+        
+        // Look for any link near the button
+        const modal = modalElement || document.querySelector('div[role="dialog"]');
+        const buttonRect = button.getBoundingClientRect();
+        
+        // Find all links in the modal
+        const allLinks = Array.from(modal.querySelectorAll('a[href*="/"]'));
+        let closestLink = null;
+        let closestDistance = Infinity;
+        
+        for (let link of allLinks) {
+            const href = link.getAttribute('href');
+            if (href && href.startsWith('/') && !href.includes('/followers') && !href.includes('/following') && !href.includes('/p/') && !href.includes('/reel/')) {
+                const linkRect = link.getBoundingClientRect();
+                const distance = Math.sqrt(
+                    Math.pow(linkRect.left - buttonRect.left, 2) + 
+                    Math.pow(linkRect.top - buttonRect.top, 2)
+                );
+                
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestLink = link;
+                }
+            }
+        }
+        
+        if (closestLink) {
+            const href = closestLink.getAttribute('href');
+            const username = href.split('/')[1];
+            if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
+                console.log('Found username from closest link:', username);
+                return username;
+            }
+        }
+        
+        // Try to find any text near the button
+        const allElements = Array.from(modal.querySelectorAll('*'));
+        for (let element of allElements) {
+            const text = element.textContent.trim();
+            if (text && /^[a-z0-9._]{1,30}$/i.test(text) && 
+                !text.toLowerCase().includes('follow') && 
+                !text.toLowerCase().includes('requested') &&
+                text.length > 1) {
+                const elementRect = element.getBoundingClientRect();
+                const distance = Math.sqrt(
+                    Math.pow(elementRect.left - buttonRect.left, 2) + 
+                    Math.pow(elementRect.top - buttonRect.top, 2)
+                );
+                
+                if (distance < 200) { // Within 200px
+                    console.log('Found username from nearby element:', text);
+                    return text;
+                }
+            }
+        }
+        
+        console.log('Alternative extraction failed');
+        return null;
+    } catch (error) {
+        console.log('Error in alternative username extraction:', error);
         return null;
     }
 }
