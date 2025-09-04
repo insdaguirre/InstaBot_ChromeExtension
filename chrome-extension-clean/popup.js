@@ -171,17 +171,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Unfollow batch function
     window.unfollowBatch = function(batchIndex) {
+        console.log('Unfollow button clicked for batch index:', batchIndex);
         updateStatus(`🚀 Starting unfollow for batch ${batchIndex + 1}...`);
         
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            console.log('Sending message to tab:', tabs[0].id);
             chrome.tabs.sendMessage(tabs[0].id, {
                 action: 'unfollowBatch',
                 batchIndex: batchIndex
             }, function(response) {
-                if (response) {
+                console.log('Response from content script:', response);
+                if (chrome.runtime.lastError) {
+                    console.error('Error:', chrome.runtime.lastError);
+                    updateStatus(`❌ Error: ${chrome.runtime.lastError.message}`);
+                } else if (response) {
                     updateStatus(response.message);
                     // Refresh batches list after unfollowing
                     setTimeout(() => loadBatches(), 1000);
+                } else {
+                    updateStatus('❌ No response from content script');
                 }
             });
         });

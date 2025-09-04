@@ -32,9 +32,14 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         });
         return true;
     } else if (request.action === 'unfollowBatch') {
+        console.log('Received unfollowBatch request for batch index:', request.batchIndex);
         if (!isRunning) {
             unfollowBatch(request.batchIndex).then(result => {
+                console.log('unfollowBatch completed with result:', result);
                 sendResponse(result);
+            }).catch(error => {
+                console.error('unfollowBatch error:', error);
+                sendResponse({message: `❌ Error: ${error.message}`});
             });
         } else {
             sendResponse({message: "❌ Already running, please wait..."});
@@ -332,13 +337,17 @@ async function startFollowing(count) {
 
 // Unfollow specific batch
 async function unfollowBatch(batchIndex) {
+    console.log('unfollowBatch started for index:', batchIndex);
     isRunning = true;
     
     try {
         // Load batches and get the specific batch
+        console.log('Loading batches...');
         const batches = await loadBatches();
+        console.log('Loaded batches:', batches);
+        
         if (!batches || batchIndex >= batches.length) {
-            throw new Error('Batch not found');
+            throw new Error(`Batch not found. Index: ${batchIndex}, Total batches: ${batches ? batches.length : 0}`);
         }
         
         const batch = batches[batchIndex];
