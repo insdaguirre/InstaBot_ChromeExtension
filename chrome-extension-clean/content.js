@@ -129,8 +129,29 @@ async function startFollowing(count) {
                     // Get username with improved extraction - try both methods
                     let username = getUsernameFromButtonEnhanced(button, modal) || getUsernameFromButton(button, modal);
                     
-                    // Use a more reliable display name
-                    const displayName = username || `user_${followed + 1}`;
+                    // Use a more reliable display name - try to get unique identifier
+                    let displayName = username;
+                    if (!displayName) {
+                        // Try to get any unique text from the button's context
+                        const row = button.closest('div[role="dialog"] li') || button.closest('li') || button.closest('div');
+                        if (row) {
+                            const allText = row.textContent.trim();
+                            const words = allText.split(/\s+/).filter(word => 
+                                word.length > 1 && 
+                                /^[a-z0-9._]+$/i.test(word) && 
+                                !word.includes('Follow') && 
+                                !word.includes('Following') &&
+                                !word.includes('Requested')
+                            );
+                            if (words.length > 0) {
+                                displayName = words[0];
+                            }
+                        }
+                        // Final fallback
+                        if (!displayName) {
+                            displayName = `user_${followed + 1}`;
+                        }
+                    }
                     
                     updateStatus(`⏳ Following @${displayName} (${followed + 1}/${count})`);
                     
@@ -319,8 +340,29 @@ async function startUnfollowing(count) {
                     // Get username with improved extraction
                     let username = getUsernameFromButtonEnhanced(button, modal) || getUsernameFromButton(button, modal);
                     
-                    // Use a more reliable display name
-                    const displayName = username || `user_${unfollowed + 1}`;
+                    // Use a more reliable display name - try to get unique identifier
+                    let displayName = username;
+                    if (!displayName) {
+                        // Try to get any unique text from the button's context
+                        const row = button.closest('div[role="dialog"] li') || button.closest('li') || button.closest('div');
+                        if (row) {
+                            const allText = row.textContent.trim();
+                            const words = allText.split(/\s+/).filter(word => 
+                                word.length > 1 && 
+                                /^[a-z0-9._]+$/i.test(word) && 
+                                !word.includes('Follow') && 
+                                !word.includes('Following') &&
+                                !word.includes('Requested')
+                            );
+                            if (words.length > 0) {
+                                displayName = words[0];
+                            }
+                        }
+                        // Final fallback
+                        if (!displayName) {
+                            displayName = `user_${unfollowed + 1}`;
+                        }
+                    }
                     
                     updateStatus(`⏳ Unfollowing @${displayName} (${unfollowed + 1}/${count})`);
                     
@@ -526,24 +568,40 @@ function getUsernameFromButtonEnhanced(button, modalElement = null) {
                   button.closest('div');
         
         if (row) {
-            // Look for links with profile URLs
+            // Look for links with profile URLs - more comprehensive search
             const profileLinks = row.querySelectorAll('a[href*="/"]');
             for (let link of profileLinks) {
                 const href = link.getAttribute('href');
-                if (href && href.includes('/') && !href.includes('/followers') && !href.includes('/following')) {
-                    const username = href.split('/').filter(part => part && !part.includes('instagram.com'))[0];
+                if (href && href.includes('/') && !href.includes('/followers') && !href.includes('/following') && !href.includes('/p/') && !href.includes('/reel/')) {
+                    const username = href.split('/').filter(part => part && !part.includes('instagram.com') && !part.includes('www.instagram.com'))[0];
                     if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
+                        console.log('Found username from link:', username);
                         return username.toLowerCase();
                     }
                 }
             }
             
-            // Look for spans with username-like text
+            // Look for spans with username-like text - more specific search
             const spans = row.querySelectorAll('span');
             for (let span of spans) {
                 const text = span.textContent.trim();
-                if (text && /^[a-z0-9._]{1,30}$/i.test(text) && !text.includes('Follow') && !text.includes('Following')) {
+                if (text && /^[a-z0-9._]{1,30}$/i.test(text) && 
+                    !text.includes('Follow') && !text.includes('Following') && 
+                    !text.includes('Requested') && !text.includes('Unfollow') &&
+                    text.length > 1) {
+                    console.log('Found username from span:', text);
                     return text.toLowerCase();
+                }
+            }
+            
+            // Look for any text content that looks like a username
+            const allText = row.textContent;
+            const usernameMatch = allText.match(/(?:^|\s)([a-z0-9._]{1,30})(?:\s|$)/i);
+            if (usernameMatch) {
+                const candidate = usernameMatch[1];
+                if (candidate && !candidate.includes('Follow') && !candidate.includes('Following')) {
+                    console.log('Found username from text match:', candidate);
+                    return candidate.toLowerCase();
                 }
             }
         }
@@ -556,7 +614,7 @@ function getUsernameFromButtonEnhanced(button, modalElement = null) {
         
         for (let link of allLinks) {
             const href = link.getAttribute('href');
-            if (href && href.includes('/') && !href.includes('/followers') && !href.includes('/following')) {
+            if (href && href.includes('/') && !href.includes('/followers') && !href.includes('/following') && !href.includes('/p/') && !href.includes('/reel/')) {
                 const linkRect = link.getBoundingClientRect();
                 const distance = Math.sqrt(
                     Math.pow(linkRect.left - buttonRect.left, 2) + 
@@ -572,12 +630,31 @@ function getUsernameFromButtonEnhanced(button, modalElement = null) {
         
         if (closestLink) {
             const href = closestLink.getAttribute('href');
-            const username = href.split('/').filter(part => part && !part.includes('instagram.com'))[0];
+            const username = href.split('/').filter(part => part && !part.includes('instagram.com') && !part.includes('www.instagram.com'))[0];
             if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
+                console.log('Found username from closest link:', username);
                 return username.toLowerCase();
             }
         }
         
+        // Strategy 3: Look for username in button's parent elements
+        let parent = button.parentElement;
+        for (let i = 0; i < 5 && parent; i++) {
+            const links = parent.querySelectorAll('a[href*="/"]');
+            for (let link of links) {
+                const href = link.getAttribute('href');
+                if (href && href.includes('/') && !href.includes('/followers') && !href.includes('/following') && !href.includes('/p/') && !href.includes('/reel/')) {
+                    const username = href.split('/').filter(part => part && !part.includes('instagram.com') && !part.includes('www.instagram.com'))[0];
+                    if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
+                        console.log('Found username from parent link:', username);
+                        return username.toLowerCase();
+                    }
+                }
+            }
+            parent = parent.parentElement;
+        }
+        
+        console.log('No username found for button');
         return null;
     } catch (error) {
         console.log('Error in enhanced username extraction:', error);
@@ -712,5 +789,6 @@ function detectButtonStateChange(originalButton, userRow, originalText) {
 }
 
 // Make the function available globally for testing
+window.detectButtonStateChange = detectButtonStateChange; 
 window.detectButtonStateChange = detectButtonStateChange; 
 window.detectButtonStateChange = detectButtonStateChange; 
