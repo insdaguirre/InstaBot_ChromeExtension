@@ -421,17 +421,73 @@ async function unfollowBatch(batchIndex) {
 // Helper function to find and unfollow a specific user
 async function findAndUnfollowUser(username, modal) {
     try {
+        // First, try to use the search input to find the user
+        const searchInput = modal.querySelector('input[placeholder="Search"]') || 
+                           modal.querySelector('input[aria-label="Search input"]') ||
+                           modal.querySelector('input.x1lugfcp');
+        
+        if (searchInput) {
+            // Clear search and type username
+            searchInput.focus();
+            searchInput.value = '';
+            await sleep(300, true);
+            
+            // Type the username
+            searchInput.value = username;
+            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            await sleep(1500, true); // Wait for search results
+            
+            // Look for the user in search results
+            const followingButtons = modal.querySelectorAll('button');
+            for (let button of followingButtons) {
+                const btnText = (getButtonText(button) || '').toLowerCase();
+                if (btnText.includes('following')) {
+                    // Check if this is our target user by looking nearby for username
+                    const container = button.closest('li') || 
+                                     button.closest('div[style*="flex"]') || 
+                                     button.closest('div');
+                    
+                    if (container && container.textContent.toLowerCase().includes(username.toLowerCase())) {
+                        // Found the user, click to unfollow
+                        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        await sleep(500, true);
+                        button.click();
+                        
+                        // Wait for unfollow confirmation dialog
+                        await sleep(1000, true);
+                        
+                        // Look for unfollow confirmation button
+                        const unfollowBtn = await findUnfollowButton();
+                        if (unfollowBtn) {
+                            unfollowBtn.click();
+                            await sleep(500, true);
+                            
+                            // Clear search after unfollowing
+                            searchInput.value = '';
+                            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+                            await sleep(500, true);
+                            
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            // Clear search if user not found
+            searchInput.value = '';
+            searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+            await sleep(500, true);
+        }
+        
+        // Fallback: manual scroll search (if search doesn't work)
         let scrollAttempts = 0;
-        const maxScrollAttempts = 15;
+        const maxScrollAttempts = 10;
         
         while (scrollAttempts < maxScrollAttempts) {
-            // Look for username in the visible content first (more reliable)
             const allElements = modal.querySelectorAll('*');
             
             for (let element of allElements) {
-                // Check if this element contains the username
                 if (element.textContent && element.textContent.trim().toLowerCase() === username.toLowerCase()) {
-                    // Find the closest following button to this username
                     let container = element.closest('li') || 
                                    element.closest('div[style*="flex"]') || 
                                    element.closest('div');
@@ -441,15 +497,12 @@ async function findAndUnfollowUser(username, modal) {
                         if (followingBtn) {
                             const btnText = (getButtonText(followingBtn) || '').toLowerCase();
                             if (btnText.includes('following')) {
-                                // Found the user and their following button
                                 followingBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
                                 await sleep(500, true);
                                 followingBtn.click();
                                 
-                                // Wait for unfollow confirmation dialog
                                 await sleep(1000, true);
                                 
-                                // Look for unfollow confirmation button
                                 const unfollowBtn = await findUnfollowButton();
                                 if (unfollowBtn) {
                                     unfollowBtn.click();
@@ -462,7 +515,6 @@ async function findAndUnfollowUser(username, modal) {
                 }
             }
             
-            // If not found, scroll down to load more users
             scrollModal(modal);
             await sleep(2000, true);
             scrollAttempts++;
