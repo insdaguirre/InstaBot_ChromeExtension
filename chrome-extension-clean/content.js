@@ -31,6 +31,15 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             sendResponse({batches: batches});
         });
         return true;
+    } else if (request.action === 'unfollowBatch') {
+        if (!isRunning) {
+            unfollowBatch(request.batchIndex).then(result => {
+                sendResponse(result);
+            });
+        } else {
+            sendResponse({message: "❌ Already running, please wait..."});
+        }
+        return true;
     }
 });
 
@@ -319,6 +328,159 @@ async function startFollowing(count) {
         isRunning = false;
         currentBatch = null;
     }
+}
+
+// Unfollow specific batch
+async function unfollowBatch(batchIndex) {
+    isRunning = true;
+    
+    try {
+        // Load batches and get the specific batch
+        const batches = await loadBatches();
+        if (!batches || batchIndex >= batches.length) {
+            throw new Error('Batch not found');
+        }
+        
+        const batch = batches[batchIndex];
+        const usersToUnfollow = batch.users.filter(user => !user.unfollowed);
+        
+        if (usersToUnfollow.length === 0) {
+            return {message: "📋 All users in this batch have already been unfollowed"};
+        }
+        
+        updateStatus(`🎯 Starting to unfollow ${usersToUnfollow.length} users from batch...`);
+        
+        // Check if we're on the right page (following page)
+        if (!window.location.href.includes('/following/')) {
+            throw new Error('Please navigate to your following page first');
+        }
+        
+        // Wait for modal to be ready
+        const modal = await waitForElement('div[role="dialog"]', 5000);
+        
+        let unfollowed = 0;
+        let attempts = 0;
+        const maxAttempts = 20;
+        
+        // For each user in the batch, try to find and unfollow them
+        for (let user of usersToUnfollow) {
+            try {
+                updateStatus(`🔍 Looking for @${user.username}...`);
+                
+                // Look for the user's Following button
+                const found = await findAndUnfollowUser(user.username, modal);
+                
+                if (found) {
+                    unfollowed++;
+                    user.unfollowed = true;
+                    user.unfollowed_at = new Date().toISOString();
+                    updateStatus(`✅ Unfollowed @${user.username} (${unfollowed}/${usersToUnfollow.length})`);
+                    
+                    // Save updated batch
+                    batches[batchIndex] = batch;
+                    await chrome.storage.local.set({ followBatches: batches });
+                    
+                    // Wait between unfollows
+                    await sleep(2000, true);
+                } else {
+                    updateStatus(`⚠️ Could not find @${user.username} in following list`);
+                }
+                
+                if (unfollowed >= usersToUnfollow.length) break;
+                
+            } catch (error) {
+                updateStatus(`❌ Error unfollowing @${user.username}: ${error.message}`);
+            }
+        }
+        
+        const message = unfollowed > 0 
+            ? `🎉 Successfully unfollowed ${unfollowed} users from batch!`
+            : `⚠️ Could not unfollow any users from this batch`;
+            
+        updateStatus(message);
+        return {message};
+        
+    } catch (error) {
+        const errorMsg = `❌ Error: ${error.message}`;
+        updateStatus(errorMsg);
+        return {message: errorMsg};
+    } finally {
+        isRunning = false;
+    }
+}
+
+// Helper function to find and unfollow a specific user
+async function findAndUnfollowUser(username, modal) {
+    try {
+        // Scroll through the following list to find the user
+        let found = false;
+        let scrollAttempts = 0;
+        const maxScrollAttempts = 10;
+        
+        while (!found && scrollAttempts < maxScrollAttempts) {
+            // Look for the user's Following button
+            const allButtons = Array.from(modal.querySelectorAll('button'));
+            
+            for (let button of allButtons) {
+                const text = (getButtonText(button) || '').toLowerCase();
+                if (text.includes('following')) {
+                    // Check if this button is for our target user
+                    const buttonUsername = extractUsernameSimple(button, modal);
+                    if (buttonUsername && buttonUsername.toLowerCase() === username.toLowerCase()) {
+                        // Found the user, click to unfollow
+                        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        await sleep(500, true);
+                        button.click();
+                        
+                        // Wait for unfollow confirmation dialog
+                        await sleep(1000, true);
+                        
+                        // Look for unfollow confirmation button
+                        const unfollowBtn = await findUnfollowButton();
+                        if (unfollowBtn) {
+                            unfollowBtn.click();
+                            await sleep(500, true);
+                            return true;
+                        }
+                    }
+                }
+            }
+            
+            // Scroll down to load more users
+            scrollModal(modal);
+            await sleep(2000, true);
+            scrollAttempts++;
+        }
+        
+        return false;
+    } catch (error) {
+        console.log('Error finding user:', error);
+        return false;
+    }
+}
+
+// Helper function to find unfollow confirmation button
+async function findUnfollowButton() {
+    const allButtons = document.querySelectorAll('button');
+    for (let btn of allButtons) {
+        const btnText = (getButtonText(btn) || '').toLowerCase();
+        if (btnText.includes('unfollow')) {
+            return btn;
+        }
+    }
+    
+    // Also check in dialogs
+    const dialogs = document.querySelectorAll('div[role="dialog"]');
+    for (let d of dialogs) {
+        for (let b of d.querySelectorAll('button')) {
+            const btnText = (getButtonText(b) || '').toLowerCase();
+            if (btnText.includes('unfollow')) {
+                return b;
+            }
+        }
+    }
+    
+    return null;
 }
 
 // Start unfollowing users

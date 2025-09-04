@@ -180,6 +180,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }, function(response) {
                 if (response) {
                     updateStatus(response.message);
+                    // Refresh batches list after unfollowing
+                    setTimeout(() => loadBatches(), 1000);
                 }
             });
         });
