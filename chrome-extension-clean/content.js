@@ -597,14 +597,14 @@ async function startUnfollowing(count) {
                     }
                     
                     updateStatus(`⏳ Unfollowing @${displayName} (${unfollowed + 1}/${count})`);
-                    
-                    // Click following button
-                    button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    await sleep(500, true);
-                    button.click();
-                    
+                        
+                        // Click following button
+                        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        await sleep(500, true);
+                        button.click();
+                        
                     // Wait for unfollow confirmation dialog
-                    await sleep(1000, true);
+                        await sleep(1000, true);
                     
                     // Look for unfollow button with multiple strategies
                     let unfollowBtn = null;
@@ -652,11 +652,11 @@ async function startUnfollowing(count) {
                     } else {
                         updateStatus(`❌ Could not find unfollow confirmation for @${displayName}`);
                     }
-                    
-                    // Wait between unfollows with additional randomization
-                    await sleep(1000, true);
-                    // Add extra random delay to make pattern less predictable
-                    await randomDelay(300, 1000);
+                        
+                        // Wait between unfollows with additional randomization
+                        await sleep(1000, true);
+                        // Add extra random delay to make pattern less predictable
+                        await randomDelay(300, 1000);
                 } catch (error) {
                     console.log('Error unfollowing user:', error);
                     updateStatus(`❌ Error processing user: ${error.message}`);
