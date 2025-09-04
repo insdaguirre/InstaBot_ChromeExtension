@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const followCountInput = document.getElementById('followCount');
     const batchesList = document.getElementById('batchesList');
     const refreshBatchesBtn = document.getElementById('refreshBatches');
+    const unfollowSelectedBtn = document.getElementById('unfollowSelected');
 
     // Check current page when popup opens
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
@@ -139,16 +140,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         Sources: ${sources}
                     </div>
                     ${usersToUnfollow > 0 ? `
-                        <button id="unfollowBtn${index}" style="
-                            background: #f0f0f0; 
-                            border: 1px solid #808080; 
-                            padding: 4px 8px; 
-                            font-size: 9px; 
-                            cursor: pointer;
-                            color: black;
-                        ">
-                            Unfollow (${usersToUnfollow})
-                        </button>
+                        <div style="margin-top: 6px;">
+                            <input type="checkbox" id="batchCheck${index}" value="${index}" style="margin-right: 6px;">
+                            <label for="batchCheck${index}" style="font-size: 9px; cursor: pointer;">
+                                Select to unfollow ${usersToUnfollow} users
+                            </label>
+                        </div>
                     ` : `
                         <div style="color: #00aa00; font-size: 9px; font-weight: bold;">
                             ✓ All unfollowed
@@ -167,29 +164,42 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         batchesList.innerHTML = html;
-        
-        // Add simple click handlers like the working buttons
-        for (let i = 0; i < sortedBatches.slice(0, 5).length; i++) {
-            const unfollowBtn = document.getElementById(`unfollowBtn${i}`);
-            if (unfollowBtn) {
-                unfollowBtn.addEventListener('click', function() {
-                    updateStatus(`🚀 Starting unfollow for batch ${i + 1}...`);
-                    
-                    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                        chrome.tabs.sendMessage(tabs[0].id, {
-                            action: 'unfollowBatch',
-                            batchIndex: i
-                        }, function(response) {
-                            if (response) {
-                                updateStatus(response.message);
-                                setTimeout(() => loadBatches(), 1000);
-                            }
-                        });
-                    });
-                });
-            }
-        }
     }
+
+    // Unfollow selected batches
+    unfollowSelectedBtn.addEventListener('click', function() {
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        
+        if (checkboxes.length === 0) {
+            updateStatus("❌ Please select at least one batch to unfollow");
+            return;
+        }
+        
+        updateStatus(`🚀 Starting to unfollow ${checkboxes.length} selected batch(es)...`);
+        
+        // Process each selected batch
+        let processed = 0;
+        checkboxes.forEach(checkbox => {
+            const batchIndex = parseInt(checkbox.value);
+            
+            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    action: 'unfollowBatch',
+                    batchIndex: batchIndex
+                }, function(response) {
+                    processed++;
+                    if (response) {
+                        updateStatus(response.message);
+                    }
+                    
+                    // Refresh when all batches are processed
+                    if (processed === checkboxes.length) {
+                        setTimeout(() => loadBatches(), 1000);
+                    }
+                });
+            });
+        });
+    });
 
     // Refresh batches
     refreshBatchesBtn.addEventListener('click', function() {
