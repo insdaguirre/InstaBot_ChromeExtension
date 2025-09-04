@@ -69,6 +69,7 @@ async function startFollowing(count) {
     isRunning = true;
     let followed = 0;
     let privateAccountsUnfollowed = 0;
+    let processedUsernames = new Set(); // Track processed usernames to avoid duplicates
     
     updateStatus(`🎯 Looking for follow buttons...`);
     
@@ -126,9 +127,21 @@ async function startFollowing(count) {
                 if (followed >= count) break;
                 
                 try {
-                    // Get username (optional)
-                    let username = getUsernameFromButton(button, modal);
-                    const displayName = username || 'unknown';
+                    // Get username with improved extraction - try both methods
+                    let username = getUsernameFromButtonEnhanced(button, modal) || getUsernameFromButton(button, modal);
+                    
+                    // Skip if we've already processed this username
+                    if (username && processedUsernames.has(username)) {
+                        continue;
+                    }
+                    
+                    // Use a more reliable display name
+                    const displayName = username || `user_${followed + 1}`;
+                    
+                    // Add to processed set
+                    if (username) {
+                        processedUsernames.add(username);
+                    }
                     
                     updateStatus(`⏳ Following @${displayName} (${followed + 1}/${count})`);
                     
@@ -148,60 +161,93 @@ async function startFollowing(count) {
                     await sleep(500, true);
                     button.click();
                     
-                    // Wait a moment and first check the clicked button itself
-                    await sleep(1200, true);
-                    let newText = (getButtonText(button) || '').toLowerCase();
+                    // Wait longer for button state to change and check multiple times
+                    let newText = '';
+                    let buttonStateChanged = false;
+                    let maxWaitAttempts = 8; // Increased from 4
                     
-                    // If not changed yet, retry a few times and optionally search nearby
-                    if (!(newText.includes('following') || newText.includes('requested'))) {
-                        let updatedButton = null;
-                        let buttonAttempts = 0;
-                        const maxButtonAttempts = 4;
-                        while (!updatedButton && buttonAttempts < maxButtonAttempts) {
-                            const buttons = (userRow || modal).querySelectorAll('button');
+                    for (let waitAttempt = 0; waitAttempt < maxWaitAttempts; waitAttempt++) {
+                        await sleep(800, true); // Increased wait time
+                        
+                        // Check the original button first
+                        newText = (getButtonText(button) || '').toLowerCase();
+                        
+                        if (newText !== originalText && (newText.includes('following') || newText.includes('requested'))) {
+                            buttonStateChanged = true;
+                            break;
+                        }
+                        
+                        // If original button hasn't changed, look for updated button in user row
+                        if (userRow) {
+                            const buttons = userRow.querySelectorAll('button');
                             for (let btn of buttons) {
-                                const t = (getButtonText(btn) || '').toLowerCase();
-                                if (t !== originalText && (t.includes('following') || t.includes('requested'))) {
-                                    updatedButton = btn; break;
+                                const btnText = (getButtonText(btn) || '').toLowerCase();
+                                if (btnText !== originalText && (btnText.includes('following') || btnText.includes('requested'))) {
+                                    newText = btnText;
+                                    buttonStateChanged = true;
+                                    break;
                                 }
                             }
-                            if (!updatedButton) { await sleep(400, true); buttonAttempts++; }
                         }
-                        if (updatedButton) newText = (getButtonText(updatedButton) || '').toLowerCase();
+                        
+                        if (buttonStateChanged) break;
                     }
                     
-                    if (newText.includes('following')) {
+                    if (buttonStateChanged && newText.includes('following')) {
                         // Public account - successfully followed
                         followed++;
                         updateStatus(`✅ Followed @${displayName} (public account) (${followed}/${count})`);
-                    } else if (newText.includes('requested')) {
+                    } else if (buttonStateChanged && newText.includes('requested')) {
                         // Private account - unfollow it
                         updateStatus(`⚠️ @${displayName} is private, unfollowing...`);
                         
-                        await sleep(800, true);
-                        // Click again to open confirm, then find Unfollow
+                        // Click the button again to open the unfollow confirmation
                         button.click();
-                        await sleep(800, true);
+                        await sleep(1000, true);
+                        
+                        // Look for unfollow button with multiple strategies
                         let unfollowBtn = null;
+                        
+                        // Strategy 1: Look for button with "Unfollow" text
                         const allButtons = document.querySelectorAll('button');
                         for (let btn of allButtons) {
-                            const t = (getButtonText(btn) || '').toLowerCase();
-                            if (t.includes('unfollow')) { unfollowBtn = btn; break; }
+                            const btnText = (getButtonText(btn) || '').toLowerCase();
+                            if (btnText.includes('unfollow')) { 
+                                unfollowBtn = btn; 
+                                break; 
+                            }
                         }
+                        
+                        // Strategy 2: Look in dialogs
                         if (!unfollowBtn) {
                             const dialogs = document.querySelectorAll('div[role="dialog"]');
                             for (let d of dialogs) {
                                 for (let b of d.querySelectorAll('button')) {
-                                    const t = (getButtonText(b) || '').toLowerCase();
-                                    if (t.includes('unfollow')) { unfollowBtn = b; break; }
+                                    const btnText = (getButtonText(b) || '').toLowerCase();
+                                    if (btnText.includes('unfollow')) { 
+                                        unfollowBtn = b; 
+                                        break; 
+                                    }
                                 }
                                 if (unfollowBtn) break;
                             }
                         }
+                        
+                        // Strategy 3: Look for any button containing "unfollow" case-insensitive
+                        if (!unfollowBtn) {
+                            for (let btn of allButtons) {
+                                if (btn.textContent.toLowerCase().includes('unfollow')) {
+                                    unfollowBtn = btn;
+                                    break;
+                                }
+                            }
+                        }
+                        
                         if (unfollowBtn) {
                             unfollowBtn.click();
-                            await sleep(400, true);
-                            updateStatus(`🔄 Unfollowed @${displayName} (private account)`);
+                            await sleep(600, true);
+                            privateAccountsUnfollowed++;
+                            updateStatus(`🔄 Unfollowed @${displayName} (private account) (${privateAccountsUnfollowed} private accounts processed)`);
                         } else {
                             updateStatus(`❌ Could not find unfollow confirmation for @${displayName}`);
                         }
@@ -215,6 +261,7 @@ async function startFollowing(count) {
                     await randomDelay(200, 800);
                 } catch (error) {
                     console.log('Error following user:', error);
+                    updateStatus(`❌ Error processing user: ${error.message}`);
                 }
             }
             
@@ -228,8 +275,8 @@ async function startFollowing(count) {
         }
         
         const message = followed === count 
-            ? `🎉 Successfully followed ${followed} public users! (${privateAccountsUnfollowed} private accounts were skipped)`
-            : `⚠️ Followed ${followed}/${count} public users (${privateAccountsUnfollowed} private accounts were skipped)`;
+            ? `🎉 Successfully followed ${followed} public users! (${privateAccountsUnfollowed} private accounts were unfollowed)`
+            : `⚠️ Followed ${followed}/${count} public users (${privateAccountsUnfollowed} private accounts were unfollowed)`;
             
         updateStatus(message);
         return {message};
@@ -247,22 +294,30 @@ async function startFollowing(count) {
 async function startUnfollowing(count) {
     isRunning = true;
     let unfollowed = 0;
+    let processedUsernames = new Set(); // Track processed usernames to avoid duplicates
     
     updateStatus(`🎯 Looking for following buttons...`);
     
     try {
         // Wait for modal to be ready
-        await waitForElement('div[role="dialog"]', 5000);
+        const modal = await waitForElement('div[role="dialog"]', 5000);
         
         let attempts = 0;
         let maxAttempts = 20;
         
         while (unfollowed < count && attempts < maxAttempts) {
-            const followingButtons = document.querySelectorAll('button:has(div:contains("Following"))');
+            // Find Following buttons more reliably
+            const allButtons = Array.from(modal.querySelectorAll('button'));
+            const followingButtons = allButtons.filter(button => {
+                const text = (getButtonText(button) || '').toLowerCase();
+                return text.includes('following') && !text.includes('unfollow');
+            });
+            
+            updateStatus(`🔍 Found ${followingButtons.length} following buttons (attempt ${attempts + 1}/${maxAttempts})`);
             
             if (followingButtons.length === 0) {
                 updateStatus(`📜 Scrolling to find more users...`);
-                scrollModal();
+                scrollModal(modal);
                 await sleep(2000, true);
                 attempts++;
                 continue;
@@ -273,40 +328,92 @@ async function startUnfollowing(count) {
                 if (unfollowed >= count) break;
                 
                 try {
-                    // Get username
-                    const username = getUsernameFromButton(button);
+                    // Get username with improved extraction
+                    let username = getUsernameFromButtonEnhanced(button, modal) || getUsernameFromButton(button, modal);
                     
-                    if (username) {
-                        updateStatus(`⏳ Unfollowing @${username} (${unfollowed + 1}/${count})`);
-                        
-                        // Click following button
-                        button.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        await sleep(500, true);
-                        button.click();
-                        
-                        // Wait for and click unfollow confirmation
-                        await sleep(1000, true);
-                        const unfollowBtn = document.querySelector('button:contains("Unfollow")');
-                        if (unfollowBtn) {
-                            unfollowBtn.click();
-                        }
-                        
-                        unfollowed++;
-                        updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${count})`);
-                        
-                        // Wait between unfollows with additional randomization
-                        await sleep(1000, true);
-                        // Add extra random delay to make pattern less predictable
-                        await randomDelay(300, 1000);
+                    // Skip if we've already processed this username
+                    if (username && processedUsernames.has(username)) {
+                        continue;
                     }
+                    
+                    // Use a more reliable display name
+                    const displayName = username || `user_${unfollowed + 1}`;
+                    
+                    // Add to processed set
+                    if (username) {
+                        processedUsernames.add(username);
+                    }
+                    
+                    updateStatus(`⏳ Unfollowing @${displayName} (${unfollowed + 1}/${count})`);
+                    
+                    // Click following button
+                    button.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    await sleep(500, true);
+                    button.click();
+                    
+                    // Wait for unfollow confirmation dialog
+                    await sleep(1000, true);
+                    
+                    // Look for unfollow button with multiple strategies
+                    let unfollowBtn = null;
+                    
+                    // Strategy 1: Look for button with "Unfollow" text
+                    const allButtonsAfter = document.querySelectorAll('button');
+                    for (let btn of allButtonsAfter) {
+                        const btnText = (getButtonText(btn) || '').toLowerCase();
+                        if (btnText.includes('unfollow')) { 
+                            unfollowBtn = btn; 
+                            break; 
+                        }
+                    }
+                    
+                    // Strategy 2: Look in dialogs
+                    if (!unfollowBtn) {
+                        const dialogs = document.querySelectorAll('div[role="dialog"]');
+                        for (let d of dialogs) {
+                            for (let b of d.querySelectorAll('button')) {
+                                const btnText = (getButtonText(b) || '').toLowerCase();
+                                if (btnText.includes('unfollow')) { 
+                                    unfollowBtn = b; 
+                                    break; 
+                                }
+                            }
+                            if (unfollowBtn) break;
+                        }
+                    }
+                    
+                    // Strategy 3: Look for any button containing "unfollow" case-insensitive
+                    if (!unfollowBtn) {
+                        for (let btn of allButtonsAfter) {
+                            if (btn.textContent.toLowerCase().includes('unfollow')) {
+                                unfollowBtn = btn;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (unfollowBtn) {
+                        unfollowBtn.click();
+                        await sleep(600, true);
+                        unfollowed++;
+                        updateStatus(`✅ Unfollowed @${displayName} (${unfollowed}/${count})`);
+                    } else {
+                        updateStatus(`❌ Could not find unfollow confirmation for @${displayName}`);
+                    }
+                    
+                    // Wait between unfollows with additional randomization
+                    await sleep(1000, true);
+                    // Add extra random delay to make pattern less predictable
+                    await randomDelay(300, 1000);
                 } catch (error) {
                     console.log('Error unfollowing user:', error);
+                    updateStatus(`❌ Error processing user: ${error.message}`);
                 }
             }
             
             // Scroll to load more users if needed
             if (unfollowed < count) {
-                scrollModal();
+                scrollModal(modal);
                 await sleep(2000, true);
             }
             
@@ -427,6 +534,77 @@ function getUsernameFromButton(button, modalElement = null) {
         console.log('Error extracting username:', error);
     }
     return null;
+}
+
+// Enhanced username extraction with better fallbacks
+function getUsernameFromButtonEnhanced(button, modalElement = null) {
+    try {
+        const modal = modalElement || document.querySelector('div[role="dialog"]');
+        
+        // Strategy 1: Look for username in the same row as the button
+        let row = button.closest('div[role="dialog"] li') || 
+                  button.closest('li') ||
+                  button.closest('div[style*="display: flex"]') ||
+                  button.closest('div');
+        
+        if (row) {
+            // Look for links with profile URLs
+            const profileLinks = row.querySelectorAll('a[href*="/"]');
+            for (let link of profileLinks) {
+                const href = link.getAttribute('href');
+                if (href && href.includes('/') && !href.includes('/followers') && !href.includes('/following')) {
+                    const username = href.split('/').filter(part => part && !part.includes('instagram.com'))[0];
+                    if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
+                        return username.toLowerCase();
+                    }
+                }
+            }
+            
+            // Look for spans with username-like text
+            const spans = row.querySelectorAll('span');
+            for (let span of spans) {
+                const text = span.textContent.trim();
+                if (text && /^[a-z0-9._]{1,30}$/i.test(text) && !text.includes('Follow') && !text.includes('Following')) {
+                    return text.toLowerCase();
+                }
+            }
+        }
+        
+        // Strategy 2: Look for the closest profile link to the button
+        const allLinks = Array.from((modal || document).querySelectorAll('a[href*="/"]'));
+        const buttonRect = button.getBoundingClientRect();
+        let closestLink = null;
+        let closestDistance = Infinity;
+        
+        for (let link of allLinks) {
+            const href = link.getAttribute('href');
+            if (href && href.includes('/') && !href.includes('/followers') && !href.includes('/following')) {
+                const linkRect = link.getBoundingClientRect();
+                const distance = Math.sqrt(
+                    Math.pow(linkRect.left - buttonRect.left, 2) + 
+                    Math.pow(linkRect.top - buttonRect.top, 2)
+                );
+                
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestLink = link;
+                }
+            }
+        }
+        
+        if (closestLink) {
+            const href = closestLink.getAttribute('href');
+            const username = href.split('/').filter(part => part && !part.includes('instagram.com'))[0];
+            if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
+                return username.toLowerCase();
+            }
+        }
+        
+        return null;
+    } catch (error) {
+        console.log('Error in enhanced username extraction:', error);
+        return null;
+    }
 }
 
 // Get button text from the div inside the button
