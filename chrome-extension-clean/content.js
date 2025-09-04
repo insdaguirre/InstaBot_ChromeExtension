@@ -520,13 +520,38 @@ function getUsernameFromButton(button, modalElement = null) {
 // Simple and reliable username extraction
 function extractUsernameSimple(button, modalElement = null) {
     try {
-        // Find the user row containing this button
+        // Find the user row containing this button - try multiple selectors
         let row = button.closest('li') || 
                   button.closest('div[role="dialog"] li') ||
                   button.closest('div[style*="display: flex"]') ||
+                  button.closest('div[style*="display: flex"]') ||
                   button.closest('div');
         
-        if (!row) return null;
+        if (!row) {
+            // If no row found, try to find any nearby link
+            const modal = modalElement || document.querySelector('div[role="dialog"]');
+            const buttonRect = button.getBoundingClientRect();
+            const allLinks = Array.from(modal.querySelectorAll('a[href*="/"]'));
+            
+            for (let link of allLinks) {
+                const linkRect = link.getBoundingClientRect();
+                const distance = Math.sqrt(
+                    Math.pow(linkRect.left - buttonRect.left, 2) + 
+                    Math.pow(linkRect.top - buttonRect.top, 2)
+                );
+                
+                if (distance < 100) { // Within 100px
+                    const href = link.getAttribute('href');
+                    if (href && href.startsWith('/') && !href.includes('/followers') && !href.includes('/following') && !href.includes('/p/') && !href.includes('/reel/')) {
+                        const username = href.split('/')[1];
+                        if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
+                            return username;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
         
         // Look for profile links in the row
         const links = row.querySelectorAll('a[href*="/"]');
