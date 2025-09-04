@@ -167,36 +167,40 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         batchesList.innerHTML = html;
-    }
-
-    // Add event delegation for unfollow buttons
-    batchesList.addEventListener('click', function(event) {
-        if (event.target.classList.contains('unfollow-btn')) {
-            const batchIndex = parseInt(event.target.getAttribute('data-batch-index'));
-            console.log('Unfollow button clicked for batch index:', batchIndex);
-            updateStatus(`🚀 Starting unfollow for batch ${batchIndex + 1}...`);
-            
-            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
-                console.log('Sending message to tab:', tabs[0].id);
-                chrome.tabs.sendMessage(tabs[0].id, {
-                    action: 'unfollowBatch',
-                    batchIndex: batchIndex
-                }, function(response) {
-                    console.log('Response from content script:', response);
-                    if (chrome.runtime.lastError) {
-                        console.error('Error:', chrome.runtime.lastError);
-                        updateStatus(`❌ Error: ${chrome.runtime.lastError.message}`);
-                    } else if (response) {
-                        updateStatus(response.message);
-                        // Refresh batches list after unfollowing
-                        setTimeout(() => loadBatches(), 1000);
-                    } else {
-                        updateStatus('❌ No response from content script');
-                    }
+        
+        // Add click handlers to all unfollow buttons
+        const unfollowButtons = batchesList.querySelectorAll('.unfollow-btn');
+        console.log('Found', unfollowButtons.length, 'unfollow buttons');
+        unfollowButtons.forEach((button, idx) => {
+            console.log('Adding click handler to button', idx);
+            button.addEventListener('click', function() {
+                console.log('Button clicked!');
+                const batchIndex = parseInt(this.getAttribute('data-batch-index'));
+                console.log('Unfollow button clicked for batch index:', batchIndex);
+                updateStatus(`🚀 Starting unfollow for batch ${batchIndex + 1}...`);
+                
+                chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                    console.log('Sending message to tab:', tabs[0].id);
+                    chrome.tabs.sendMessage(tabs[0].id, {
+                        action: 'unfollowBatch',
+                        batchIndex: batchIndex
+                    }, function(response) {
+                        console.log('Response from content script:', response);
+                        if (chrome.runtime.lastError) {
+                            console.error('Error:', chrome.runtime.lastError);
+                            updateStatus(`❌ Error: ${chrome.runtime.lastError.message}`);
+                        } else if (response) {
+                            updateStatus(response.message);
+                            // Refresh batches list after unfollowing
+                            setTimeout(() => loadBatches(), 1000);
+                        } else {
+                            updateStatus('❌ No response from content script');
+                        }
+                    });
                 });
             });
-        }
-    });
+        });
+    }
 
     // Refresh batches
     refreshBatchesBtn.addEventListener('click', function() {
