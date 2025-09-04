@@ -69,7 +69,6 @@ async function startFollowing(count) {
     isRunning = true;
     let followed = 0;
     let privateAccountsUnfollowed = 0;
-    let processedUsernames = new Set(); // Track processed usernames to avoid duplicates
     
     updateStatus(`🎯 Looking for follow buttons...`);
     
@@ -130,18 +129,8 @@ async function startFollowing(count) {
                     // Get username with improved extraction - try both methods
                     let username = getUsernameFromButtonEnhanced(button, modal) || getUsernameFromButton(button, modal);
                     
-                    // Skip if we've already processed this username
-                    if (username && processedUsernames.has(username)) {
-                        continue;
-                    }
-                    
                     // Use a more reliable display name
                     const displayName = username || `user_${followed + 1}`;
-                    
-                    // Add to processed set
-                    if (username) {
-                        processedUsernames.add(username);
-                    }
                     
                     updateStatus(`⏳ Following @${displayName} (${followed + 1}/${count})`);
                     
@@ -294,7 +283,6 @@ async function startFollowing(count) {
 async function startUnfollowing(count) {
     isRunning = true;
     let unfollowed = 0;
-    let processedUsernames = new Set(); // Track processed usernames to avoid duplicates
     
     updateStatus(`🎯 Looking for following buttons...`);
     
@@ -331,18 +319,8 @@ async function startUnfollowing(count) {
                     // Get username with improved extraction
                     let username = getUsernameFromButtonEnhanced(button, modal) || getUsernameFromButton(button, modal);
                     
-                    // Skip if we've already processed this username
-                    if (username && processedUsernames.has(username)) {
-                        continue;
-                    }
-                    
                     // Use a more reliable display name
                     const displayName = username || `user_${unfollowed + 1}`;
-                    
-                    // Add to processed set
-                    if (username) {
-                        processedUsernames.add(username);
-                    }
                     
                     updateStatus(`⏳ Unfollowing @${displayName} (${unfollowed + 1}/${count})`);
                     
