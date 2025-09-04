@@ -520,9 +520,10 @@ function getUsernameFromButton(button, modalElement = null) {
 // Simple and reliable username extraction
 function extractUsernameSimple(button, modalElement = null) {
     try {
-        // Find the user row containing this button
+        // Find the user row containing this button - try multiple selectors
         let row = button.closest('li') || 
                   button.closest('div[role="dialog"] li') ||
+                  button.closest('div[style*="display: flex"]') ||
                   button.closest('div[style*="display: flex"]') ||
                   button.closest('div');
         
