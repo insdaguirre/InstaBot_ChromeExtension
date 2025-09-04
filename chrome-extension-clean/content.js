@@ -128,11 +128,15 @@ async function startFollowing(count) {
                 try {
                     // Extract username for this specific button
                     let displayName = extractUsernameSimple(button, modal);
+                    console.log(`Button ${followed + 1}: Extracted username = "${displayName}"`);
+                    
                     if (!displayName) {
                         displayName = `user_${followed + 1}`;
+                        console.log(`Button ${followed + 1}: Using fallback name = "${displayName}"`);
                     }
                     
                     // Update status with current username
+                    console.log(`Button ${followed + 1}: Final display name = "${displayName}"`);
                     updateStatus(`⏳ Following @${displayName} (${followed + 1}/${count})`);
                     
                     // Store original button text and find the user row for reliable button tracking
@@ -555,9 +559,12 @@ function extractUsernameSimple(button, modalElement = null) {
         
         // Strategy 1: Look for the specific span with username class
         const usernameSpan = row.querySelector('span._ap3a._aaco._aacw._aacx._aad7._aade');
+        console.log('Strategy 1 - Found span:', usernameSpan);
         if (usernameSpan) {
             const username = usernameSpan.textContent.trim();
+            console.log('Strategy 1 - Username text:', username);
             if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
+                console.log('Strategy 1 - Valid username found:', username);
                 return username;
             }
         }
