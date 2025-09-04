@@ -520,10 +520,9 @@ function getUsernameFromButton(button, modalElement = null) {
 // Simple and reliable username extraction
 function extractUsernameSimple(button, modalElement = null) {
     try {
-        // Find the user row containing this button - try multiple selectors
+        // Find the user row containing this button
         let row = button.closest('li') || 
                   button.closest('div[role="dialog"] li') ||
-                  button.closest('div[style*="display: flex"]') ||
                   button.closest('div[style*="display: flex"]') ||
                   button.closest('div');
         
@@ -553,7 +552,27 @@ function extractUsernameSimple(button, modalElement = null) {
             return null;
         }
         
-        // Look for profile links in the row
+        // Strategy 1: Look for the specific span with username class
+        const usernameSpan = row.querySelector('span._ap3a._aaco._aacw._aacx._aad7._aade');
+        if (usernameSpan) {
+            const username = usernameSpan.textContent.trim();
+            if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
+                return username;
+            }
+        }
+        
+        // Strategy 2: Look for any span with the username class pattern
+        const spans = row.querySelectorAll('span._ap3a');
+        for (let span of spans) {
+            const text = span.textContent.trim();
+            if (text && /^[a-z0-9._]{1,30}$/i.test(text) && 
+                !text.toLowerCase().includes('follow') && 
+                !text.toLowerCase().includes('requested')) {
+                return text;
+            }
+        }
+        
+        // Strategy 3: Look for profile links in the row
         const links = row.querySelectorAll('a[href*="/"]');
         for (let link of links) {
             const href = link.getAttribute('href');
@@ -565,7 +584,7 @@ function extractUsernameSimple(button, modalElement = null) {
             }
         }
         
-        // Look for any text that looks like a username
+        // Strategy 4: Look for any text that looks like a username
         const allText = row.textContent || '';
         const words = allText.split(/\s+/);
         
