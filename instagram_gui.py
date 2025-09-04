@@ -7,12 +7,19 @@ from tkinter import ttk, messagebox
 import json
 import os
 from pathlib import Path
+from datetime import datetime
+import random
+import threading
 
 class InstagramBotGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Instagram Bot")
         self.root.geometry("800x600")
+        
+        # Initialize batches data first
+        self.batches_file = Path('instagram_data/follow_batches.json')
+        self.batches = self.load_batches()
         
         # Create notebook for tabs
         self.notebook = ttk.Notebook(self.root)
@@ -21,6 +28,7 @@ class InstagramBotGUI:
         # Create tabs
         self.create_login_tab()
         self.create_control_tab()
+        self.create_batch_unfollow_tab()
         self.create_stats_tab()
         
         # Load settings if they exist
@@ -85,6 +93,53 @@ class InstagramBotGUI:
         ttk.Button(button_frame, text="⏹️ Stop", command=self.stop_automation).pack(side="left", padx=5)
         ttk.Button(button_frame, text="🧪 Test Connection", command=self.test_connection).pack(side="left", padx=5)
     
+    def create_batch_unfollow_tab(self):
+        """Create batch unfollow tab"""
+        unfollow_frame = ttk.Frame(self.notebook)
+        self.notebook.add(unfollow_frame, text="Batch Unfollow")
+        
+        # Status display
+        status_frame = ttk.LabelFrame(unfollow_frame, text="Status", padding=15)
+        status_frame.pack(fill="x", padx=20, pady=(20,10))
+        
+        self.unfollow_status_var = tk.StringVar(value="Ready to unfollow users from your following list")
+        ttk.Label(status_frame, textvariable=self.unfollow_status_var, font=("SF Pro Display", 12)).pack()
+        
+        # Current page info
+        current_page_frame = ttk.LabelFrame(unfollow_frame, text="Current Page", padding=15)
+        current_page_frame.pack(fill="x", padx=20, pady=10)
+        
+        self.current_page_var = tk.StringVar(value="Not on Instagram following page")
+        ttk.Label(current_page_frame, textvariable=self.current_page_var, font=("SF Pro Display", 10)).pack()
+        
+        # Batches display
+        batches_frame = ttk.LabelFrame(unfollow_frame, text="Follow Batches", padding=15)
+        batches_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        # Create canvas for scrollable batches
+        self.batches_canvas = tk.Canvas(batches_frame, height=300)
+        scrollbar = ttk.Scrollbar(batches_frame, orient="vertical", command=self.batches_canvas.yview)
+        self.scrollable_batches_frame = ttk.Frame(self.batches_canvas)
+        
+        self.scrollable_batches_frame.bind(
+            "<Configure>",
+            lambda e: self.batches_canvas.configure(scrollregion=self.batches_canvas.bbox("all"))
+        )
+        
+        self.batches_canvas.create_window((0, 0), window=self.scrollable_batches_frame, anchor="nw")
+        self.batches_canvas.configure(yscrollcommand=scrollbar.set)
+        
+        self.batches_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        
+        # Refresh button
+        refresh_frame = ttk.Frame(unfollow_frame)
+        refresh_frame.pack(fill="x", padx=20, pady=10)
+        ttk.Button(refresh_frame, text="🔄 Refresh Batches", command=self.refresh_batches_display).pack(side="left", padx=5)
+        
+        # Initial load of batches
+        self.refresh_batches_display()
+    
     def create_stats_tab(self):
         """Create statistics tab"""
         stats_frame = ttk.Frame(self.notebook)
@@ -100,11 +155,217 @@ class InstagramBotGUI:
         # Update button
         ttk.Button(stats_frame, text="🔄 Refresh Stats", command=self.update_stats).pack(pady=10)
     
+    def load_batches(self):
+        """Load batches from file"""
+        if self.batches_file.exists():
+            try:
+                with open(self.batches_file, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"Error loading batches: {e}")
+                return []
+        return []
+    
+    def refresh_batches_display(self):
+        """Refresh the batches display"""
+        # Clear existing frames
+        for widget in self.scrollable_batches_frame.winfo_children():
+            widget.destroy()
+        
+        # Reload batches
+        self.batches = self.load_batches()
+        
+        if not self.batches:
+            no_batches_label = ttk.Label(self.scrollable_batches_frame, text="No follow batches found", font=("SF Pro Display", 12))
+            no_batches_label.pack(pady=20)
+            return
+        
+        # Sort batches by timestamp (newest first)
+        sorted_batches = sorted(
+            self.batches,
+            key=lambda x: datetime.fromisoformat(x['timestamp']),
+            reverse=True
+        )
+        
+        # Create frames for each batch
+        for batch in sorted_batches:
+            self.create_batch_unfollow_frame(batch)
+    
+    def create_batch_unfollow_frame(self, batch):
+        """Create a frame for a batch in the unfollow tab"""
+        batch_frame = ttk.Frame(self.scrollable_batches_frame, relief="solid", borderwidth=1)
+        batch_frame.pack(fill="x", pady=(0, 10), padx=5)
+        
+        # Inner frame for padding
+        inner_frame = ttk.Frame(batch_frame, padding=10)
+        inner_frame.pack(fill="x")
+        
+        # Batch header with timestamp
+        header_frame = ttk.Frame(inner_frame)
+        header_frame.pack(fill="x")
+        
+        # Format timestamp
+        try:
+            timestamp = datetime.fromisoformat(batch['timestamp'])
+            date_str = timestamp.strftime("%Y-%m-%d %H:%M")
+        except:
+            date_str = "Unknown time"
+        
+        # Header label
+        ttk.Label(
+            header_frame,
+            text=f"Batch from {date_str}",
+            font=("SF Pro Display", 11, "bold")
+        ).pack(side="left")
+        
+        # Status indicators
+        total_users = len(batch['users'])
+        unfollowed = sum(1 for user in batch['users'] if user.get('unfollowed', False))
+        
+        status_label = ttk.Label(
+            header_frame,
+            text=f"Users: {total_users} • Unfollowed: {unfollowed}",
+            font=("SF Pro Display", 10)
+        )
+        status_label.pack(side="right")
+        
+        # Source accounts
+        sources = batch.get('source_accounts', [])
+        if sources:
+            ttk.Label(
+                inner_frame,
+                text=f"Sources: {', '.join(sources)}",
+                font=("SF Pro Display", 10)
+            ).pack(fill="x", pady=(5, 0))
+        
+        # Action buttons - only show if there are users to unfollow
+        if total_users > 0 and unfollowed < total_users:
+            actions_frame = ttk.Frame(inner_frame)
+            actions_frame.pack(fill="x", pady=(10, 0))
+            
+            ttk.Button(
+                actions_frame,
+                text="Unfollow This Batch",
+                command=lambda b=batch: self.unfollow_batch(b)
+            ).pack(side="left")
+            
+            # Show count of users to unfollow
+            users_to_unfollow = total_users - unfollowed
+            ttk.Label(
+                actions_frame,
+                text=f"({users_to_unfollow} users will be unfollowed)",
+                font=("SF Pro Display", 9)
+            ).pack(side="left", padx=(10, 0))
+        elif total_users == 0:
+            ttk.Label(
+                inner_frame,
+                text="No users in this batch",
+                font=("SF Pro Display", 9),
+                foreground="gray"
+            ).pack(pady=(10, 0))
+        else:
+            ttk.Label(
+                inner_frame,
+                text="All users in this batch have been unfollowed",
+                font=("SF Pro Display", 9),
+                foreground="green"
+            ).pack(pady=(10, 0))
+    
+    def unfollow_batch(self, batch):
+        """Unfollow all users in a specific batch"""
+        if not self.username_var.get() or not self.password_var.get():
+            messagebox.showerror("Error", "Please enter username and password in the Login & Settings tab")
+            return
+        
+        # Count users to unfollow
+        users_to_unfollow = [u for u in batch['users'] if not u.get('unfollowed', False)]
+        
+        if not users_to_unfollow:
+            messagebox.showinfo("Info", "All users in this batch have already been unfollowed")
+            return
+        
+        # Confirm unfollow
+        if not messagebox.askyesno(
+            "Confirm Unfollow",
+            f"Are you sure you want to unfollow {len(users_to_unfollow)} users from the batch created on {datetime.fromisoformat(batch['timestamp']).strftime('%Y-%m-%d %H:%M')}?"
+        ):
+            return
+        
+        self.unfollow_status_var.set(f"Starting unfollow process for {len(users_to_unfollow)} users...")
+        
+        # Start unfollow process in background thread
+        def unfollow_thread():
+            try:
+                # Import the actual Instagram bot
+                import sys
+                sys.path.append('deployment_package')
+                from instagram_gui import InstagramBotGUI
+                
+                # Create bot instance
+                bot = InstagramBotGUI(
+                    self.username_var.get().strip(),
+                    self.password_var.get().strip(),
+                    [],  # No target accounts needed for unfollowing
+                    0
+                )
+                
+                # Initialize and login
+                if not bot.init_driver(show_browser=False):  # Hide browser for unfollowing
+                    raise Exception("Failed to initialize browser")
+                    
+                if not bot.login():
+                    raise Exception("Failed to login to Instagram")
+                
+                # Unfollow each user in batch
+                total_users = len(users_to_unfollow)
+                unfollowed_count = 0
+                
+                for i, user in enumerate(users_to_unfollow):
+                    try:
+                        self.unfollow_status_var.set(f"Unfollowing {i + 1}/{total_users}: @{user['username']}")
+                        
+                        # Use the bot's unfollow method
+                        if hasattr(bot, 'unfollow_user') and bot.unfollow_user(user['username']):
+                            user['unfollowed'] = True
+                            user['unfollowed_at'] = datetime.now().isoformat()
+                            unfollowed_count += 1
+                            
+                            # Save progress
+                            try:
+                                with open(self.batches_file, 'w') as f:
+                                    json.dump(self.batches, f, indent=2)
+                            except Exception as e:
+                                print(f"Warning: Could not save batch progress: {e}")
+                        
+                        # Add delay between unfollows to avoid rate limiting
+                        import time
+                        time.sleep(random.uniform(2, 4))
+                        
+                    except Exception as e:
+                        print(f"Error unfollowing @{user['username']}: {e}")
+                        continue
+                
+                # Cleanup
+                if bot.driver:
+                    bot.driver.quit()
+                
+                # Update status and refresh display
+                self.unfollow_status_var.set(f"Unfollow completed: {unfollowed_count}/{total_users} users unfollowed")
+                self.root.after(0, self.refresh_batches_display)
+                
+            except Exception as e:
+                error_msg = f"Failed to unfollow batch: {str(e)}"
+                self.unfollow_status_var.set(f"Error: {error_msg}")
+                messagebox.showerror("Error", error_msg)
+        
+        # Start the unfollow thread
+        threading.Thread(target=unfollow_thread, daemon=True).start()
+    
     def toggle_password_visibility(self):
         """Toggle password visibility"""
         if self.show_password_var.get():
             self.password_entry.configure(show="")
-                        else:
+        else:
             self.password_entry.configure(show="*")
     
     def save_settings(self):
@@ -181,7 +442,7 @@ def main():
     y = (root.winfo_screenheight() - 600) // 2
     root.geometry(f"800x600+{x}+{y}")
     
-        root.mainloop()
+    root.mainloop()
 
 if __name__ == "__main__":
     main() 
