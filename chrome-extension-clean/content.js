@@ -1,6 +1,7 @@
 // content.js - Runs on Instagram pages and performs automation
 
 let isRunning = false;
+let currentBatch = null;
 
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
@@ -25,6 +26,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             sendResponse({message: "❌ Already running, please wait..."});
         }
         return true; // Indicates we will respond asynchronously
+    } else if (request.action === 'getBatches') {
+        loadBatches().then(batches => {
+            sendResponse({batches: batches});
+        });
+        return true;
     }
 });
 
@@ -69,6 +75,15 @@ async function startFollowing(count) {
     isRunning = true;
     let followed = 0;
     let privateAccountsUnfollowed = 0;
+    
+    // Create new batch
+    currentBatch = {
+        id: generateBatchId(),
+        timestamp: new Date().toISOString(),
+        source_accounts: [getSourceAccountFromUrl()],
+        users: [],
+        completed: false
+    };
     
     updateStatus(`🎯 Looking for follow buttons...`);
     
@@ -128,15 +143,12 @@ async function startFollowing(count) {
                 try {
                     // Extract username for this specific button
                     let displayName = extractUsernameSimple(button, modal);
-                    console.log(`Button ${followed + 1}: Extracted username = "${displayName}"`);
                     
                     if (!displayName) {
                         displayName = `user_${followed + 1}`;
-                        console.log(`Button ${followed + 1}: Using fallback name = "${displayName}"`);
                     }
                     
                     // Update status with current username
-                    console.log(`Button ${followed + 1}: Final display name = "${displayName}"`);
                     updateStatus(`⏳ Following @${displayName} (${followed + 1}/${count})`);
                     
                     // Store original button text and find the user row for reliable button tracking
@@ -190,6 +202,17 @@ async function startFollowing(count) {
                     if (buttonStateChanged && newText.includes('following')) {
                         // Public account - successfully followed
                         followed++;
+                        
+                        // Add to current batch
+                        if (currentBatch && displayName !== `user_${followed}`) {
+                            currentBatch.users.push({
+                                username: displayName,
+                                followed_at: new Date().toISOString(),
+                                unfollowed: false,
+                                source_account: getSourceAccountFromUrl()
+                            });
+                        }
+                        
                         updateStatus(`✅ Followed @${displayName} (public account) (${followed}/${count})`);
                     } else if (buttonStateChanged && newText.includes('requested')) {
                         // Private account - unfollow it
@@ -268,6 +291,13 @@ async function startFollowing(count) {
             attempts++;
         }
         
+        // Complete and save batch
+        if (currentBatch) {
+            currentBatch.completed = true;
+            await saveBatch(currentBatch);
+            updateStatus(`📦 Saved batch with ${currentBatch.users.length} users`);
+        }
+        
         const message = followed === count 
             ? `🎉 Successfully followed ${followed} public users! (${privateAccountsUnfollowed} private accounts were unfollowed)`
             : `⚠️ Followed ${followed}/${count} public users (${privateAccountsUnfollowed} private accounts were unfollowed)`;
@@ -276,11 +306,18 @@ async function startFollowing(count) {
         return {message};
         
     } catch (error) {
+        // Save incomplete batch if error occurs
+        if (currentBatch && currentBatch.users.length > 0) {
+            currentBatch.completed = false;
+            await saveBatch(currentBatch);
+        }
+        
         const errorMsg = `❌ Error: ${error.message}`;
         updateStatus(errorMsg);
         return {message: errorMsg};
     } finally {
         isRunning = false;
+        currentBatch = null;
     }
 }
 
@@ -536,7 +573,6 @@ function extractUsernameSimple(button, modalElement = null) {
             
             if (hasFollowButton && hasUsernameSpan) {
                 row = parent;
-                console.log('Found row at level', i, 'with username span');
                 break;
             }
             parent = parent.parentElement;
@@ -548,22 +584,17 @@ function extractUsernameSimple(button, modalElement = null) {
                   button.closest('div[role="dialog"] li') ||
                   button.closest('div[style*="display: flex"]') ||
                   button.closest('div');
-            console.log('Using fallback row detection');
         }
         
         if (!row) {
-            console.log('No row found for button');
             return null;
         }
         
         // Strategy 1: Look for the specific span with username class
         const usernameSpan = row.querySelector('span._ap3a._aaco._aacw._aacx._aad7._aade');
-        console.log('Strategy 1 - Found span:', usernameSpan);
         if (usernameSpan) {
             const username = usernameSpan.textContent.trim();
-            console.log('Strategy 1 - Username text:', username);
             if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
-                console.log('Strategy 1 - Valid username found:', username);
                 return username;
             }
         }
@@ -738,7 +769,38 @@ function detectButtonStateChange(originalButton, userRow, originalText) {
     });
 }
 
+// Batch management functions
+function generateBatchId() {
+    return 'batch_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+function getSourceAccountFromUrl() {
+    const url = window.location.href;
+    const match = url.match(/instagram\.com\/([^\/]+)\/(followers|following)/);
+    return match ? match[1] : 'unknown';
+}
+
+async function loadBatches() {
+    try {
+        const result = await chrome.storage.local.get(['followBatches']);
+        return result.followBatches || [];
+    } catch (error) {
+        console.log('Error loading batches:', error);
+        return [];
+    }
+}
+
+async function saveBatch(batch) {
+    try {
+        const existingBatches = await loadBatches();
+        existingBatches.push(batch);
+        await chrome.storage.local.set({ followBatches: existingBatches });
+        console.log('Batch saved:', batch.id, 'with', batch.users.length, 'users');
+    } catch (error) {
+        console.log('Error saving batch:', error);
+    }
+}
+
 // Make the function available globally for testing
-window.detectButtonStateChange = detectButtonStateChange; 
 window.detectButtonStateChange = detectButtonStateChange; 
 window.detectButtonStateChange = detectButtonStateChange; 

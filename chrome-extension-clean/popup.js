@@ -64,6 +64,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }, function(response) {
                 if (response) {
                     updateStatus(response.message);
+                    // Refresh batches list after following
+                    setTimeout(() => loadBatches(), 1000);
                 }
                 startFollowBtn.disabled = false;
             });
@@ -74,25 +76,25 @@ document.addEventListener('DOMContentLoaded', function() {
     function loadBatches() {
         batchesList.innerHTML = '<div style="text-align: center; color: #666; font-style: italic;">Loading batches...</div>';
         
-        // Fetch batches from the local file
-        fetch(chrome.runtime.getURL('batches.json'))
-            .then(response => response.json())
-            .then(batches => {
-                displayBatches(batches);
-            })
-            .catch(error => {
-                console.error('Error loading batches:', error);
-                batchesList.innerHTML = `
-                    <div style="text-align: center; padding: 20px;">
-                        <div style="color: #cc0000; font-size: 11px; margin-bottom: 10px;">
-                            ❌ Could not load batches
+        // Get batches from Chrome storage via content script
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {action: 'getBatches'}, function(response) {
+                if (response && response.batches) {
+                    displayBatches(response.batches);
+                } else {
+                    batchesList.innerHTML = `
+                        <div style="text-align: center; padding: 20px;">
+                            <div style="color: #666; font-size: 11px; margin-bottom: 10px;">
+                                📋 No batches found
+                            </div>
+                            <div style="color: #666; font-size: 10px;">
+                                Follow some users to create batches
+                            </div>
                         </div>
-                        <div style="color: #666; font-size: 10px;">
-                            Make sure the desktop app has created batch data
-                        </div>
-                    </div>
-                `;
+                    `;
+                }
             });
+        });
     }
 
     // Display batches in the UI
