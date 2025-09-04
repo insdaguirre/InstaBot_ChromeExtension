@@ -524,36 +524,35 @@ function getUsernameFromButton(button, modalElement = null) {
 // Simple and reliable username extraction
 function extractUsernameSimple(button, modalElement = null) {
     try {
-        // Find the user row containing this button - try multiple selectors
-        let row = button.closest('li') || 
+        // Find the specific user row containing this button
+        let row = null;
+        
+        // Try to find the closest container that has both the button and username
+        let parent = button.parentElement;
+        for (let i = 0; i < 10 && parent; i++) {
+            // Look for a container that has both a follow button and a username span
+            const hasFollowButton = parent.querySelector('button') === button || parent.contains(button);
+            const hasUsernameSpan = parent.querySelector('span._ap3a._aaco._aacw._aacx._aad7._aade');
+            
+            if (hasFollowButton && hasUsernameSpan) {
+                row = parent;
+                console.log('Found row at level', i, 'with username span');
+                break;
+            }
+            parent = parent.parentElement;
+        }
+        
+        // Fallback to standard row detection
+        if (!row) {
+            row = button.closest('li') || 
                   button.closest('div[role="dialog"] li') ||
                   button.closest('div[style*="display: flex"]') ||
-                  button.closest('div[style*="display: flex"]') ||
                   button.closest('div');
+            console.log('Using fallback row detection');
+        }
         
         if (!row) {
-            // If no row found, try to find any nearby link
-            const modal = modalElement || document.querySelector('div[role="dialog"]');
-            const buttonRect = button.getBoundingClientRect();
-            const allLinks = Array.from(modal.querySelectorAll('a[href*="/"]'));
-            
-            for (let link of allLinks) {
-                const linkRect = link.getBoundingClientRect();
-                const distance = Math.sqrt(
-                    Math.pow(linkRect.left - buttonRect.left, 2) + 
-                    Math.pow(linkRect.top - buttonRect.top, 2)
-                );
-                
-                if (distance < 100) { // Within 100px
-                    const href = link.getAttribute('href');
-                    if (href && href.startsWith('/') && !href.includes('/followers') && !href.includes('/following') && !href.includes('/p/') && !href.includes('/reel/')) {
-                        const username = href.split('/')[1];
-                        if (username && /^[a-z0-9._]{1,30}$/i.test(username)) {
-                            return username;
-                        }
-                    }
-                }
-            }
+            console.log('No row found for button');
             return null;
         }
         
