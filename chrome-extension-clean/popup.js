@@ -81,8 +81,10 @@ document.addEventListener('DOMContentLoaded', function() {
         chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
             chrome.tabs.sendMessage(tabs[0].id, {action: 'getBatches'}, function(response) {
                 if (response && response.batches) {
+                    console.log('Loaded batches in popup:', response.batches.length, 'total batches');
                     displayBatches(response.batches);
                 } else {
+                    console.log('No batches received from content script');
                     batchesList.innerHTML = `
                         <div style="text-align: center; padding: 20px;">
                             <div style="color: #666; font-size: 11px; margin-bottom: 10px;">
@@ -117,8 +119,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Sort batches by timestamp (newest first)
         const sortedBatches = batches.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         
+        console.log('Displaying all batches:', sortedBatches.length, 'total');
+        
         let html = '';
-        sortedBatches.slice(0, 5).forEach((batch, index) => { // Show only first 5 batches
+        sortedBatches.forEach((batch, index) => { // Show ALL batches
             const date = new Date(batch.timestamp);
             const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             
@@ -154,14 +158,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
             `;
         });
-
-        if (sortedBatches.length > 5) {
-            html += `
-                <div style="text-align: center; color: #666; font-size: 9px; margin-top: 8px;">
-                    ... and ${sortedBatches.length - 5} more batches
-                </div>
-            `;
-        }
 
         batchesList.innerHTML = html;
     }

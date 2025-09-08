@@ -28,6 +28,11 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         return true; // Indicates we will respond asynchronously
     } else if (request.action === 'getBatches') {
         loadBatches().then(batches => {
+            console.log('Content script loaded batches:', batches ? batches.length : 0, 'total');
+            if (batches && batches.length > 0) {
+                console.log('Latest batch:', batches[0]);
+                console.log('Oldest batch:', batches[batches.length - 1]);
+            }
             sendResponse({batches: batches});
         });
         return true;
@@ -1013,7 +1018,16 @@ function getSourceAccountFromUrl() {
 async function loadBatches() {
     try {
         const result = await chrome.storage.local.get(['followBatches']);
-        return result.followBatches || [];
+        const batches = result.followBatches || [];
+        console.log('loadBatches: Found', batches.length, 'batches in storage');
+        
+        // Log batch details for debugging
+        batches.forEach((batch, index) => {
+            const date = new Date(batch.timestamp);
+            console.log(`Batch ${index}: ${batch.id}, ${date.toLocaleDateString()}, ${batch.users ? batch.users.length : 0} users`);
+        });
+        
+        return batches;
     } catch (error) {
         console.log('Error loading batches:', error);
         return [];
