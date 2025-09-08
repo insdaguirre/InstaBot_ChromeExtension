@@ -37,9 +37,9 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
         });
         return true;
     } else if (request.action === 'unfollowBatch') {
-        console.log('Received unfollowBatch request for batch index:', request.batchIndex);
+        console.log('Received unfollowBatch request for batch ID:', request.batchId);
         if (!isRunning) {
-            unfollowBatch(request.batchIndex).then(result => {
+            unfollowBatch(request.batchId).then(result => {
                 console.log('unfollowBatch completed with result:', result);
                 sendResponse(result);
             }).catch(error => {
@@ -341,18 +341,19 @@ async function startFollowing(count) {
 }
 
 // Unfollow specific batch
-async function unfollowBatch(batchIndex) {
-    console.log('unfollowBatch started for index:', batchIndex);
+async function unfollowBatch(batchId) {
+    console.log('unfollowBatch started for batch ID:', batchId);
     isRunning = true;
     
     try {
-        // Load batches and get the specific batch
+        // Load batches and find the specific batch
         console.log('Loading batches...');
         const batches = await loadBatches();
         console.log('Loaded batches:', batches);
         
-        if (!batches || batchIndex >= batches.length) {
-            throw new Error(`Batch not found. Index: ${batchIndex}, Total batches: ${batches ? batches.length : 0}`);
+        const batchIndex = batches.findIndex(b => b.id === batchId);
+        if (batchIndex === -1) {
+            throw new Error(`Batch not found with ID: ${batchId}. Total batches: ${batches ? batches.length : 0}`);
         }
         
         const batch = batches[batchIndex];

@@ -145,7 +145,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     </div>
                     ${usersToUnfollow > 0 ? `
                         <div style="margin-top: 6px;">
-                            <input type="checkbox" id="batchCheck${index}" value="${index}" style="margin-right: 6px;">
+                            <input type="checkbox" id="batchCheck${index}" value="${batch.id}" style="margin-right: 6px;">
                             <label for="batchCheck${index}" style="font-size: 9px; cursor: pointer;">
                                 Select to unfollow ${usersToUnfollow} users
                             </label>
@@ -176,12 +176,12 @@ document.addEventListener('DOMContentLoaded', function() {
         // Process each selected batch
         let processed = 0;
         checkboxes.forEach(checkbox => {
-            const batchIndex = parseInt(checkbox.value);
+            const batchId = checkbox.value;
             
             chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
                 chrome.tabs.sendMessage(tabs[0].id, {
                     action: 'unfollowBatch',
-                    batchIndex: batchIndex
+                    batchId: batchId
                 }, function(response) {
                     processed++;
                     if (response) {
