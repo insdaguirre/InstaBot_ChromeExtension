@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const followCountInput = document.getElementById('followCount');
     const batchesList = document.getElementById('batchesList');
     const refreshBatchesBtn = document.getElementById('refreshBatches');
+    const deleteSelectedBtn = document.getElementById('deleteSelected');
     const unfollowSelectedBtn = document.getElementById('unfollowSelected');
 
     // Check current page when popup opens
@@ -109,7 +110,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         📋 No batches found
                     </div>
                     <div style="color: #666; font-size: 9px; margin-top: 5px;">
-                        Create batches using the desktop app first
+                        Create a batch by using Follow on a followers list (in this extension)
                     </div>
                 </div>
             `;
@@ -191,6 +192,33 @@ document.addEventListener('DOMContentLoaded', function() {
                     // Refresh when all batches are processed
                     if (processed === checkboxes.length) {
                         setTimeout(() => loadBatches(), 1000);
+                    }
+                });
+            });
+        });
+    });
+
+    // Delete selected batches
+    deleteSelectedBtn.addEventListener('click', function() {
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]:checked');
+        if (checkboxes.length === 0) {
+            updateStatus("❌ Please select at least one batch to delete");
+            return;
+        }
+        if (!confirm(`Delete ${checkboxes.length} selected batch(es)? This cannot be undone.`)) {
+            return;
+        }
+        let processed = 0;
+        checkboxes.forEach(checkbox => {
+            const batchId = checkbox.value;
+            chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+                chrome.tabs.sendMessage(tabs[0].id, { action: 'deleteBatchById', batchId }, function(response) {
+                    processed++;
+                    if (response) {
+                        updateStatus(response.message || 'Deleted');
+                    }
+                    if (processed === checkboxes.length) {
+                        setTimeout(() => loadBatches(), 500);
                     }
                 });
             });

@@ -67,7 +67,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 batchesListDiv.textContent = statusText;
             } else {
-                batchesListDiv.textContent = `📋 No batches yet`;
+                batchesListDiv.innerHTML = `
+                    <div style="text-align: center; padding: 8px;">
+                        <div style="color: #666; font-size: 11px;">📋 No batches found</div>
+                        <div style="color: #666; font-size: 9px; margin-top: 4px;">Create a batch by using Follow on a followers list (in this extension)</div>
+                    </div>
+                `;
             }
         }
         

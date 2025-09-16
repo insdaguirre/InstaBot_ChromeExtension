@@ -50,6 +50,24 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             sendResponse({message: "❌ Already running, please wait..."});
         }
         return true;
+    } else if (request.action === 'deleteBatchById') {
+        // Manual delete by batch id
+        (async () => {
+            try {
+                const batches = await loadBatches();
+                const index = batches.findIndex(b => b.id === request.batchId);
+                if (index === -1) {
+                    sendResponse({message: '❌ Batch not found'});
+                    return;
+                }
+                batches.splice(index, 1);
+                await chrome.storage.local.set({ followBatches: batches });
+                sendResponse({message: '🗑️ Deleted selected batch'});
+            } catch (e) {
+                sendResponse({message: `❌ Error deleting: ${e.message}`});
+            }
+        })();
+        return true;
     }
 });
 
