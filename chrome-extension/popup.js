@@ -8,6 +8,22 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusDiv = document.getElementById('status');
     const startFollowBtn = document.getElementById('startFollow');
     const startUnfollowBtn = document.getElementById('startUnfollow');
+    // Add Delete button if not present (uses same section styling)
+    let deleteBtn = document.getElementById('deleteBatch');
+    if (!deleteBtn) {
+        deleteBtn = document.createElement('button');
+        deleteBtn.id = 'deleteBatch';
+        deleteBtn.textContent = 'DELETE SELECTED BATCH';
+        const unfollowSectionEl = document.getElementById('unfollowSection');
+        if (unfollowSectionEl) {
+            const sectionInner = unfollowSectionEl.querySelector('.section');
+            if (sectionInner) {
+                sectionInner.appendChild(document.createElement('br'));
+                sectionInner.appendChild(document.createElement('br'));
+                sectionInner.appendChild(deleteBtn);
+            }
+        }
+    }
     const followCountInput = document.getElementById('followCount');
     const batchesListDiv = document.getElementById('batchesList');
     const batchSelect = document.getElementById('batchSelect');
@@ -164,6 +180,34 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
                 }
                 startUnfollowBtn.disabled = false;
+            });
+        });
+    });
+
+    // Delete selected batch manually
+    deleteBtn.addEventListener('click', function() {
+        const batchIndex = parseInt(batchSelect.value);
+        if (isNaN(batchIndex) || batchIndex < 0) {
+            updateStatus("❌ Please select a batch to delete");
+            return;
+        }
+        if (!confirm('Delete the selected batch? This cannot be undone.')) {
+            return;
+        }
+        chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+                action: 'deleteBatch',
+                batchIndex: batchIndex
+            }, function(response) {
+                if (response) {
+                    updateStatus(response.message);
+                    // Refresh batches after deletion
+                    chrome.tabs.sendMessage(tabs[0].id, {action: 'getFollowedBatches'}, function(batchesResponse) {
+                        if (batchesResponse) {
+                            updateBatchesList(batchesResponse.batches);
+                        }
+                    });
+                }
             });
         });
     });

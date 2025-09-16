@@ -81,6 +81,17 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
             sendResponse({message: "❌ Already running, please wait..."});
         }
         return true; // Indicates we will respond asynchronously
+    } else if (request.action === 'deleteBatch') {
+        // Manual delete selected batch
+        const idx = request.batchIndex;
+        if (typeof idx === 'number' && idx >= 0 && idx < followedBatches.length) {
+            const removed = followedBatches.splice(idx, 1);
+            saveFollowedBatches();
+            sendResponse({message: `🗑️ Deleted batch ${idx + 1} (${removed[0]?.count || 0} users)`});
+        } else {
+            sendResponse({message: '❌ Invalid batch selection'});
+        }
+        return true;
     }
 });
 
@@ -571,18 +582,8 @@ async function startUnfollowingBatch(batchIndex, count) {
                         console.log('📋 Removed', username, 'from batch', batchIndex + 1);
                         updateStatus(`✅ Unfollowed @${username} (${unfollowed}/${maxUsers})`);
                         
-                        // Check if batch is now empty and remove it
-                        if (batch.usernames.length === 0) {
-                            followedBatches.splice(batchIndex, 1);
-                            saveFollowedBatches();
-                            updateStatus(`🗑️ Auto-deleted empty batch ${batchIndex + 1}`);
-                            console.log('🗑️ Auto-deleted empty batch', batchIndex + 1);
-                            // Break out of the loop since the batch no longer exists
-                            break;
-                        } else {
-                            // Save the updated batch
-                            saveFollowedBatches();
-                        }
+                        // Save the updated batch (no auto-deletion)
+                        saveFollowedBatches();
                     }
                     
                     // Random delay between unfollows
@@ -597,16 +598,7 @@ async function startUnfollowingBatch(batchIndex, count) {
                         batch.usernames.splice(index, 1);
                         console.log('📋 Removed', username, 'from batch', batchIndex + 1, '(unfollow failed)');
                         saveFollowedBatches();
-                        
-                        // Check if batch is now empty and remove it
-                        if (batch.usernames.length === 0) {
-                            followedBatches.splice(batchIndex, 1);
-                            saveFollowedBatches();
-                            updateStatus(`🗑️ Auto-deleted empty batch ${batchIndex + 1}`);
-                            console.log('🗑️ Auto-deleted empty batch', batchIndex + 1);
-                            // Break out of the loop since the batch no longer exists
-                            break;
-                        }
+                        // No auto-deletion when empty; user will delete manually
                     }
                 }
             } else {
@@ -617,16 +609,7 @@ async function startUnfollowingBatch(batchIndex, count) {
                     batch.usernames.splice(index, 1);
                     console.log('📋 Removed', username, 'from batch', batchIndex + 1, '(user not found)');
                     saveFollowedBatches();
-                    
-                    // Check if batch is now empty and remove it
-                    if (batch.usernames.length === 0) {
-                        followedBatches.splice(batchIndex, 1);
-                        saveFollowedBatches();
-                        updateStatus(`🗑️ Auto-deleted empty batch ${batchIndex + 1}`);
-                        console.log('🗑️ Auto-deleted empty batch', batchIndex + 1);
-                        // Break out of the loop since the batch no longer exists
-                        break;
-                    }
+                    // No auto-deletion when empty; user will delete manually
                 }
             }
             

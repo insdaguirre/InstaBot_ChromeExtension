@@ -106,7 +106,7 @@ class BatchFollowGUI:
         btn_frame = tk.Frame(controls, bg=VINTAGE_GRAY)
         btn_frame.pack(fill=tk.X, padx=12, pady=(0, 10))
         tk.Button(btn_frame, text="START NEW BATCH", command=self.start_new_batch, font=VINTAGE_BTN_FONT, bg=VINTAGE_BTN, relief="raised", bd=2, activebackground=VINTAGE_LIGHT, anchor="center", fg="black").pack(fill=tk.X, pady=(0, 6))
-        tk.Button(btn_frame, text="DELETE UNFOLLOWED BATCHES", command=self.delete_unfollowed_batches, font=VINTAGE_BTN_FONT, bg=VINTAGE_BTN, relief="raised", bd=2, activebackground=VINTAGE_LIGHT, anchor="center", fg="black").pack(fill=tk.X)
+        tk.Button(btn_frame, text="REFRESH BATCHES", command=lambda: [self.update_batches_display(), self.update_totals()], font=VINTAGE_BTN_FONT, bg=VINTAGE_BTN, relief="raised", bd=2, activebackground=VINTAGE_LIGHT, anchor="center", fg="black").pack(fill=tk.X)
 
         # --- Batches/Logs (right column) ---
         batches_panel = tk.Frame(main, bg=VINTAGE_GRAY, bd=2, relief="groove", highlightbackground=VINTAGE_BORDER, highlightthickness=2)
@@ -196,10 +196,10 @@ class BatchFollowGUI:
             ).pack(fill=tk.X, pady=(5, 0))
         
         # Action buttons
+        actions_frame = tk.Frame(inner_frame, bg=VINTAGE_LIGHT)
+        actions_frame.pack(fill=tk.X, pady=(10, 0))
+        
         if not is_unfollowed:
-            actions_frame = tk.Frame(inner_frame, bg=VINTAGE_LIGHT)
-            actions_frame.pack(fill=tk.X, pady=(10, 0))
-            
             tk.Button(
                 actions_frame,
                 text="Unfollow All",
@@ -211,6 +211,19 @@ class BatchFollowGUI:
                 bd=2,
                 activebackground=VINTAGE_LIGHT
             ).pack(side=tk.LEFT)
+
+        # Delete Batch button (always available)
+        tk.Button(
+            actions_frame,
+            text="Delete Batch",
+            command=lambda b=batch: self.delete_batch_by_id(b.get('id')),
+            font=VINTAGE_BTN_FONT,
+            bg="#f8d7da",
+            fg="black",
+            relief="raised",
+            bd=2,
+            activebackground=VINTAGE_LIGHT
+        ).pack(side=tk.LEFT, padx=(8, 0))
             
     def toggle_password_visibility(self):
         if self.show_password_var.get():
@@ -277,32 +290,29 @@ class BatchFollowGUI:
             # Schedule next refresh
             self.root.after(5000, self._auto_refresh)
         
-    def delete_unfollowed_batches(self):
-        """Delete all batches that have been completely unfollowed"""
-        # Find batches where all users are unfollowed
-        unfollowed_batches = [
-            batch for batch in self.batches 
-            if all(user.get('unfollowed', False) for user in batch['users'])
-        ]
-        
-        if not unfollowed_batches:
-            self.update_status("No unfollowed batches to delete")
+    def delete_batch_by_id(self, batch_id):
+        """Manually delete a specific batch by id after confirmation"""
+        if not batch_id:
+            self.update_status("Error: Batch has no id")
             return
-        
+        # Find the batch
+        target = next((b for b in self.batches if b.get('id') == batch_id), None)
+        if not target:
+            self.update_status("Batch not found")
+            return
         # Confirm deletion
-        if messagebox.askyesno(
-            "Delete Unfollowed Batches",
-            f"Delete {len(unfollowed_batches)} unfollowed batches?"
-        ):
-            # Remove unfollowed batches
-            self.batches = [
-                batch for batch in self.batches 
-                if not all(user.get('unfollowed', False) for user in batch['users'])
-            ]
-            
-            # Save changes
+        try:
+            ts = target.get('timestamp', '')
+            dt = datetime.fromisoformat(ts).strftime('%Y-%m-%d %H:%M') if ts else 'Unknown time'
+        except Exception:
+            dt = 'Unknown time'
+        count = len(target.get('users', []))
+        if messagebox.askyesno("Delete Batch", f"Delete this batch from {dt} with {count} users? This cannot be undone."):
+            self.batches = [b for b in self.batches if b.get('id') != batch_id]
             self.save_batches()
-            self.update_status(f"Deleted {len(unfollowed_batches)} unfollowed batches")
+            self.update_status("Batch deleted")
+            self.update_batches_display()
+            self.update_totals()
             
     def start_new_batch(self):
         if not self.validate_inputs():
